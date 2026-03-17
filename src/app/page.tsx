@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   ProcessResult, 
   processImageToBeads, 
@@ -47,6 +48,7 @@ export default function BeadGenerator() {
   const [editMode, setEditMode] = useState<EditMode>('none');
   const [selectedPaintColor, setSelectedPaintColor] = useState<BeadColor | null>(null);
   const [canvasZoom, setCanvasZoom] = useState(1);
+  const [showColorPicker, setShowColorPicker] = useState(false);
   
   // 替换颜色功能
   const [replaceFromColor, setReplaceFromColor] = useState<BeadColor | null>(null);
@@ -830,55 +832,117 @@ export default function BeadGenerator() {
                       </div>
                       
                       {(editMode === 'brush' || editMode === 'replace') && (
-                        <div className="flex items-center gap-1 flex-wrap">
-                          <span className="text-xs text-gray-500">颜色:</span>
-                          <div className="flex gap-0.5">
-                            {ALL_COLORS.slice(0, 8).map(c => (
-                              <Tooltip key={c.id}>
-                                <TooltipTrigger>
+                        <Popover open={showColorPicker} onOpenChange={setShowColorPicker}>
+                          <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="gap-1">
+                              {selectedPaintColor ? (
+                                <>
                                   <div
-                                    className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
-                                    onClick={() => setSelectedPaintColor(c)}
-                                  >
-                                    <div
-                                      className="w-5 h-5 rounded-full border"
-                                      style={{ backgroundColor: c.hex }}
-                                    />
-                                    <span className="text-[8px] text-gray-500">{c.name.slice(0, 2)}</span>
-                                  </div>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>{c.name}</p>
-                                  <p className="text-xs text-gray-400">{c.hex}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <div className="w-6 h-7 rounded bg-gray-100 flex items-center justify-center text-[10px] font-medium">
-                                  +{ALL_COLORS.length - 8}
+                                    className="w-4 h-4 rounded-full border"
+                                    style={{ backgroundColor: selectedPaintColor.hex }}
+                                  />
+                                  <span className="text-xs">{selectedPaintColor.name.slice(0, 3)}</span>
+                                </>
+                              ) : (
+                                <span className="text-xs">选择颜色</span>
+                              )}
+                              <ChevronDown className="w-3 h-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-2" align="start">
+                            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                              {/* 普通款 */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 px-1">
+                                  <span className="text-xs font-medium text-gray-700">普通款（24色）</span>
+                                  <div className="flex-1 h-px bg-gray-200" />
                                 </div>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-[400px]">
-                                <div className="grid grid-cols-8 gap-1 p-2">
-                                  {ALL_COLORS.map(c => (
-                                    <div
-                                      key={c.id}
-                                      className={`flex flex-col items-center p-1 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
-                                      onClick={() => setSelectedPaintColor(c)}
-                                    >
-                                      <div
-                                        className="w-5 h-5 rounded-full border"
-                                        style={{ backgroundColor: c.hex }}
-                                      />
-                                      <span className="text-[8px] text-gray-500">{c.name.slice(0, 2)}</span>
-                                    </div>
+                                <div className="grid grid-cols-8 gap-0.5">
+                                  {NORMAL_COLORS.map(c => (
+                                    <Tooltip key={c.id}>
+                                      <TooltipTrigger>
+                                        <div
+                                          className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
+                                          onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
+                                        >
+                                          <div
+                                            className="w-5 h-5 rounded-full border shadow-sm"
+                                            style={{ backgroundColor: c.hex }}
+                                          />
+                                          <span className="text-[7px] text-gray-500 leading-tight">{c.name.slice(0, 2)}</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p>{c.name}</p>
+                                        <p className="text-xs text-gray-400">{c.hex}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
                                   ))}
                                 </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        </div>
+                              </div>
+                              
+                              {/* 夜光款 */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 px-1">
+                                  <span className="text-xs font-medium text-gray-700">夜光款（12色）</span>
+                                  <div className="flex-1 h-px bg-gray-200" />
+                                </div>
+                                <div className="grid grid-cols-6 gap-0.5">
+                                  {GLOW_COLORS.map(c => (
+                                    <Tooltip key={c.id}>
+                                      <TooltipTrigger>
+                                        <div
+                                          className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
+                                          onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
+                                        >
+                                          <div
+                                            className="w-5 h-5 rounded-full border shadow-sm"
+                                            style={{ backgroundColor: c.hex }}
+                                          />
+                                          <span className="text-[7px] text-gray-500 leading-tight">{c.name.slice(0, 2)}</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p>{c.name}</p>
+                                        <p className="text-xs text-gray-400">{c.hex}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* 水晶珠 */}
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 px-1">
+                                  <span className="text-xs font-medium text-gray-700">水晶珠（12色）</span>
+                                  <div className="flex-1 h-px bg-gray-200" />
+                                </div>
+                                <div className="grid grid-cols-6 gap-0.5">
+                                  {CRYSTAL_COLORS.map(c => (
+                                    <Tooltip key={c.id}>
+                                      <TooltipTrigger>
+                                        <div
+                                          className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
+                                          onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
+                                        >
+                                          <div
+                                            className="w-5 h-5 rounded-full border shadow-sm"
+                                            style={{ backgroundColor: c.hex }}
+                                          />
+                                          <span className="text-[7px] text-gray-500 leading-tight">{c.name.slice(0, 2)}</span>
+                                        </div>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="top">
+                                        <p>{c.name}</p>
+                                        <p className="text-xs text-gray-400">{c.hex}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       )}
                       
                       <div className="flex items-center gap-1 ml-auto">
@@ -973,36 +1037,101 @@ export default function BeadGenerator() {
         {/* 颜色替换对话框 */}
         {showReplaceDialog && replaceFromColor && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <Card className="w-[400px] max-h-[80vh]">
-              <CardHeader className="flex flex-row items-center justify-between">
+            <Card className="w-[420px] max-h-[80vh]">
+              <CardHeader className="flex flex-row items-center justify-between py-3">
                 <CardTitle className="text-base">替换颜色</CardTitle>
                 <Button variant="ghost" size="sm" onClick={() => setShowReplaceDialog(false)}>
                   <X className="w-4 h-4" />
                 </Button>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0">
                 <p className="text-sm text-gray-500 mb-3">
                   将 <span className="inline-flex items-center gap-1">
-                    <span className="w-4 h-4 rounded-full" style={{ backgroundColor: replaceFromColor.hex }} />
-                    {replaceFromColor.name}
+                    <span className="w-4 h-4 rounded-full border" style={{ backgroundColor: replaceFromColor.hex }} />
+                    <span className="font-medium">{replaceFromColor.name}</span>
                   </span> 替换为：
                 </p>
-                <div className="grid grid-cols-8 gap-1 max-h-[300px] overflow-y-auto">
-                  {ALL_COLORS.map(c => (
-                    <Tooltip key={c.id}>
-                      <TooltipTrigger>
-                        <div
-                          className={`w-full aspect-square rounded cursor-pointer hover:ring-2 hover:ring-purple-500`}
-                          style={{ backgroundColor: c.hex }}
-                          onClick={() => executeColorReplace(c)}
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>{c.name}</p>
-                        <p className="text-xs text-gray-400">{c.hex}</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  ))}
+                <div className="space-y-3 max-h-[350px] overflow-y-auto">
+                  {/* 普通款 */}
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-600 px-1">普通款（24色）</div>
+                    <div className="grid grid-cols-8 gap-0.5">
+                      {NORMAL_COLORS.map(c => (
+                        <Tooltip key={c.id}>
+                          <TooltipTrigger>
+                            <div
+                              className={`flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-100`}
+                              onClick={() => executeColorReplace(c)}
+                            >
+                              <div
+                                className="w-5 h-5 rounded-full border shadow-sm"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span className="text-[7px] text-gray-500">{c.name.slice(0, 2)}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{c.name}</p>
+                            <p className="text-xs text-gray-400">{c.hex}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* 夜光款 */}
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-600 px-1">夜光款（12色）</div>
+                    <div className="grid grid-cols-6 gap-0.5">
+                      {GLOW_COLORS.map(c => (
+                        <Tooltip key={c.id}>
+                          <TooltipTrigger>
+                            <div
+                              className={`flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-100`}
+                              onClick={() => executeColorReplace(c)}
+                            >
+                              <div
+                                className="w-5 h-5 rounded-full border shadow-sm"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span className="text-[7px] text-gray-500">{c.name.slice(0, 2)}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{c.name}</p>
+                            <p className="text-xs text-gray-400">{c.hex}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  {/* 水晶珠 */}
+                  <div className="space-y-1">
+                    <div className="text-xs font-medium text-gray-600 px-1">水晶珠（12色）</div>
+                    <div className="grid grid-cols-6 gap-0.5">
+                      {CRYSTAL_COLORS.map(c => (
+                        <Tooltip key={c.id}>
+                          <TooltipTrigger>
+                            <div
+                              className={`flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-100`}
+                              onClick={() => executeColorReplace(c)}
+                            >
+                              <div
+                                className="w-5 h-5 rounded-full border shadow-sm"
+                                style={{ backgroundColor: c.hex }}
+                              />
+                              <span className="text-[7px] text-gray-500">{c.name.slice(0, 2)}</span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{c.name}</p>
+                            <p className="text-xs text-gray-400">{c.hex}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
