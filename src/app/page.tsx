@@ -392,8 +392,12 @@ export default function BeadGenerator() {
     setCanvasOffset({ x: 0, y: 0 });
   }, []);
 
-  // 应用预设 - 矩形和斜板只设置参数，六角板需要创建空白画布
+  // 应用预设 - 设置参数并清空当前结果
   const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
+    // 清空当前结果
+    setProcessedResult(null);
+    setOriginalImage(null);
+    
     switch (preset) {
       case 'hexagon':
         // 六角板需要创建空白画布，因为它的结构特殊
@@ -510,7 +514,7 @@ export default function BeadGenerator() {
         } else if (canvasType === 'diagonal') {
           rowWidth = width;
           // 奇数行偏移半个珠子
-          offsetX = (y % 2 === 1) ? 0.5 : 0;
+          offsetX = (y % 2 === 0) ? 0.5 : 0;
         } else {
           rowWidth = width;
           offsetX = 0;
@@ -563,7 +567,7 @@ export default function BeadGenerator() {
         offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
       } else if (canvasType === 'diagonal') {
         // 奇数行偏移半个珠子
-        offsetX = (y % 2 === 1) ? 0.5 : 0;
+        offsetX = (y % 2 === 0) ? 0.5 : 0;
       } else {
         offsetX = 0;
       }
@@ -677,7 +681,7 @@ export default function BeadGenerator() {
       offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
     } else if (canvasType === 'diagonal') {
       // 斜板奇数行偏移半个珠子
-      offsetX = (y % 2 === 1) ? 0.5 : 0;
+      offsetX = (y % 2 === 0) ? 0.5 : 0;
     } else {
       offsetX = 0;
     }
