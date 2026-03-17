@@ -184,17 +184,20 @@ export function exportBeadPattern(
   const statsHeight = colorStats ? 140 * scale : 0;
   const padding = showLabels ? 60 * scale : 20 * scale;
   
-  // 计算画布宽度
+  // 计算画布尺寸
   let canvasWidth = width;
+  let canvasHeight = height;
   if (canvasType === 'hexagon') {
     canvasWidth = HEXAGON_MAX_WIDTH;
-  } else if (canvasType === 'diagonal') {
-    canvasWidth = width + 0.5; // 斜板需要额外半个珠子的宽度
+  }
+  // 斜板：偶数列向下偏移半个珠子，需要额外高度
+  if (canvasType === 'diagonal') {
+    canvasHeight = height + 0.5;
   }
   
   const canvas = document.createElement('canvas');
   canvas.width = canvasWidth * actualBeadSize + padding * 2;
-  canvas.height = height * actualBeadSize + padding * 2 + statsHeight;
+  canvas.height = canvasHeight * actualBeadSize + padding * 2 + statsHeight;
   
   const ctx = canvas.getContext('2d')!;
   
@@ -211,17 +214,16 @@ export function exportBeadPattern(
       if (canvasType === 'hexagon') {
         rowWidth = HEXAGON_PATTERN[y] || 0;
         offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
-      } else if (canvasType === 'diagonal') {
-        rowWidth = width;
-        offsetX = (y % 2 === 1) ? 0.5 : 0;
       } else {
         rowWidth = width;
         offsetX = 0;
       }
       
       for (let x = 0; x <= rowWidth; x++) {
-        const px = padding + (offsetX + x) * actualBeadSize;
-        const py = padding + y * actualBeadSize;
+        const px = padding + x * actualBeadSize;
+        // 斜板：偶数列向下偏移半个珠子
+        const offsetY = (canvasType === 'diagonal' && x % 2 === 1) ? 0.5 * actualBeadSize : 0;
+        const py = padding + y * actualBeadSize + offsetY;
         
         ctx.beginPath();
         ctx.arc(px, py, 2 * scale, 0, Math.PI * 2);
@@ -268,8 +270,6 @@ export function exportBeadPattern(
     
     if (canvasType === 'hexagon') {
       offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
-    } else if (canvasType === 'diagonal') {
-      offsetX = (y % 2 === 1) ? 0.5 : 0;
     } else {
       offsetX = 0;
     }
@@ -277,7 +277,9 @@ export function exportBeadPattern(
     for (let x = 0; x < rowWidth; x++) {
       const bead = row[x];
       const cx = padding + (offsetX + x) * actualBeadSize + actualBeadSize / 2;
-      const cy = padding + y * actualBeadSize + actualBeadSize / 2;
+      // 斜板：偶数列向下偏移半个珠子
+      const offsetY = (canvasType === 'diagonal' && x % 2 === 1) ? 0.5 * actualBeadSize : 0;
+      const cy = padding + y * actualBeadSize + actualBeadSize / 2 + offsetY;
       const radius = (actualBeadSize / 2) - 2 * scale;
       
       if (radius > 0) {

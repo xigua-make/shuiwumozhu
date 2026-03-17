@@ -542,15 +542,17 @@ export default function BeadGenerator() {
     
     // 对于六角板和斜板，宽度取最大值
     let canvasWidth = width;
+    let canvasHeight = height;
     if (canvasType === 'hexagon') {
       canvasWidth = HEXAGON_MAX_WIDTH;
-    } else if (canvasType === 'diagonal') {
-      // 斜板需要额外半个珠子的宽度
-      canvasWidth = width + 0.5;
+    }
+    // 斜板：偶数列向下偏移半个珠子，需要额外高度
+    if (canvasType === 'diagonal') {
+      canvasHeight = height + 0.5;
     }
     
     canvas.width = canvasWidth * beadSize + padding * 2;
-    canvas.height = height * beadSize + padding * 2;
+    canvas.height = canvasHeight * beadSize + padding * 2;
     
     const ctx = canvas.getContext('2d')!;
     
@@ -569,16 +571,18 @@ export default function BeadGenerator() {
           offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
         } else if (canvasType === 'diagonal') {
           rowWidth = width;
-          // 奇数行偏移半个珠子
-          offsetX = (y % 2 === 0) ? 0.5 : 0;
+          // 斜板：列交错，不是行交错，所以行方向不偏移
+          offsetX = 0;
         } else {
           rowWidth = width;
           offsetX = 0;
         }
         
         for (let x = 0; x <= rowWidth; x++) {
-          const px = padding + (offsetX + x) * beadSize;
-          const py = padding + y * beadSize;
+          const px = padding + x * beadSize;
+          // 斜板：偶数列向下偏移半个珠子
+          const offsetY = (canvasType === 'diagonal' && x % 2 === 1) ? 0.5 * beadSize : 0;
+          const py = padding + y * beadSize + offsetY;
           ctx.beginPath();
           ctx.arc(px, py, 1.5 * canvasZoom, 0, Math.PI * 2);
           ctx.fill();
@@ -621,9 +625,6 @@ export default function BeadGenerator() {
       
       if (canvasType === 'hexagon') {
         offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
-      } else if (canvasType === 'diagonal') {
-        // 奇数行偏移半个珠子
-        offsetX = (y % 2 === 0) ? 0.5 : 0;
       } else {
         offsetX = 0;
       }
@@ -637,7 +638,9 @@ export default function BeadGenerator() {
         }
         
         const cx = padding + (offsetX + x) * beadSize + beadSize / 2;
-        const cy = padding + y * beadSize + beadSize / 2;
+        // 斜板：偶数列向下偏移半个珠子
+        const offsetY = (canvasType === 'diagonal' && x % 2 === 1) ? 0.5 * beadSize : 0;
+        const cy = padding + y * beadSize + beadSize / 2 + offsetY;
         const radius = (beadSize / 2) - 1.5 * canvasZoom;
         
         if (radius > 0) {
@@ -725,19 +728,21 @@ export default function BeadGenerator() {
     
     // 计算点击位置
     const clickX = (e.clientX - rect.left - padding) / beadSize;
-    const y = Math.floor((e.clientY - rect.top - padding) / beadSize);
+    const clickY = (e.clientY - rect.top - padding) / beadSize;
+    
+    // 斜板：需要根据列计算偏移
+    // 先估算x，然后根据x确定偏移
+    let estimatedX = Math.floor(clickX);
+    let offsetY = (canvasType === 'diagonal' && estimatedX % 2 === 1) ? 0.5 : 0;
+    let y = Math.floor(clickY - offsetY);
     
     if (y < 0 || y >= processedResult.height) return;
     
-    // 根据画布类型计算行偏移
     const rowWidth = processedResult.beads[y].length;
     let offsetX;
     
     if (canvasType === 'hexagon') {
       offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
-    } else if (canvasType === 'diagonal') {
-      // 斜板奇数行偏移半个珠子
-      offsetX = (y % 2 === 0) ? 0.5 : 0;
     } else {
       offsetX = 0;
     }
@@ -1219,7 +1224,7 @@ export default function BeadGenerator() {
                   
                   {canvasType === 'diagonal' && (
                     <div className="p-2 bg-blue-50 rounded-lg">
-                      <p className="text-sm text-blue-700">斜板: {gridWidth}×{gridHeight} = {gridWidth * gridHeight}颗珠子（交错排列）</p>
+                      <p className="text-sm text-blue-700">斜板: {gridWidth}×{gridHeight} = {gridWidth * gridHeight}颗珠子（列交错排列）</p>
                     </div>
                   )}
                   
