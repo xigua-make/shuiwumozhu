@@ -91,15 +91,17 @@ export default function BeadGenerator() {
   useEffect(() => { maxImageSizeRef.current = maxImageSize; }, [maxImageSize]);
   useEffect(() => { selectedColorIdsRef.current = selectedColorIds; }, [selectedColorIds]);
 
-  // 获取当前选中的颜色列表
-  const getSelectedColors = useCallback(() => {
-    return ALL_COLORS.filter(c => selectedColorIds.has(c.id));
-  }, [selectedColorIds]);
+  // 获取当前选中的颜色列表 - 使用 ref 确保获取最新值
+  const getSelectedColors = () => {
+    return ALL_COLORS.filter(c => selectedColorIdsRef.current.has(c.id));
+  };
 
   // 处理图片上传
   // 处理图片上传 - 使用 ref 确保总是获取最新参数值
   const handleFileUpload = async (file: File) => {
-    if (!file.type.startsWith('image/')) {
+    console.log('handleFileUpload called with file:', file?.name, file?.type);
+    
+    if (!file || !file.type.startsWith('image/')) {
       alert('请上传图片文件');
       return;
     }
@@ -114,8 +116,14 @@ export default function BeadGenerator() {
       const currentMaxImageSize = maxImageSizeRef.current;
       const currentSelectedColorIds = selectedColorIdsRef.current;
       
+      console.log('Current params:', { currentGridWidth, currentGridHeight, currentCanvasType, currentMaxImageSize, selectedColorCount: currentSelectedColorIds.size });
+      
       const canvas = await loadImageToCanvas(file);
+      console.log('Image loaded, size:', canvas.width, 'x', canvas.height);
+      
       const resizedCanvas = resizeImage(canvas, currentMaxImageSize);
+      console.log('Image resized to:', resizedCanvas.width, 'x', resizedCanvas.height);
+      
       setOriginalImage(resizedCanvas.toDataURL());
       
       const ctx = resizedCanvas.getContext('2d')!;
@@ -133,9 +141,13 @@ export default function BeadGenerator() {
         categories.add('normal');
       }
       
+      console.log('Processing with categories:', Array.from(categories));
+      
       // 直接使用当前的 gridWidth 作为处理尺寸
       const targetSize = currentGridWidth;
       let result = processImageToBeads(imageData, targetSize, Array.from(categories));
+      
+      console.log('Process result:', result.beads.length, 'rows,', result.beads[0]?.length, 'cols');
       
       // 对于六角板，需要裁剪成六角形
       if (currentCanvasType === 'hexagon') {
@@ -163,6 +175,8 @@ export default function BeadGenerator() {
       const selectedColors = getSelectedColors();
       // 如果没有选中的颜色，使用所有颜色
       const colorsToUse = selectedColors.length > 0 ? selectedColors : ALL_COLORS;
+      
+      console.log('Colors to use:', colorsToUse.length);
       
       // 过滤结果，只使用选中的颜色
       result.beads = result.beads.map(row => 
@@ -192,7 +206,10 @@ export default function BeadGenerator() {
       });
       result.colorStats = newColorStats;
       
+      console.log('Final result - beads:', result.beads.length, 'x', result.beads[0]?.length, 'colorStats:', result.colorStats.size);
+      
       setProcessedResult(result);
+      console.log('setProcessedResult called');
     } catch (error) {
       console.error('图片处理失败:', error);
       alert('图片处理失败，请重试');
@@ -893,7 +910,7 @@ export default function BeadGenerator() {
                 <CardContent>
                   <div
                     className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
-                      ${isCanvasDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}`}
+                      ${isFileDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
@@ -1121,7 +1138,32 @@ export default function BeadGenerator() {
                           min={5} max={200} step={1}
                           value={[gridWidth]}
                           onValueChange={([value]) => setGridWidth(value)}
-                          onValueCommit={() => reprocessImage()}
+                          onValueCommit={() => originalImage && reprocessImage()}
+                        />
+                        <input
+                          type="number"
+                          min={5}
+                          max={200}
+                          value={gridWidth}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setGridWidth(5);
+                            } else {
+                              const num = parseInt(val);
+                              if (!isNaN(num)) {
+                                setGridWidth(num);
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const num = parseInt(e.target.value) || 5;
+                            const clamped = Math.min(200, Math.max(5, num));
+                            setGridWidth(clamped);
+                            if (originalImage) reprocessImage();
+                          }}
+                          className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="输入宽度 (5-200)"
                         />
                       </div>
                       <div className="space-y-2">
@@ -1133,7 +1175,32 @@ export default function BeadGenerator() {
                           min={5} max={200} step={1}
                           value={[gridHeight]}
                           onValueChange={([value]) => setGridHeight(value)}
-                          onValueCommit={() => reprocessImage()}
+                          onValueCommit={() => originalImage && reprocessImage()}
+                        />
+                        <input
+                          type="number"
+                          min={5}
+                          max={200}
+                          value={gridHeight}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              setGridHeight(5);
+                            } else {
+                              const num = parseInt(val);
+                              if (!isNaN(num)) {
+                                setGridHeight(num);
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            const num = parseInt(e.target.value) || 5;
+                            const clamped = Math.min(200, Math.max(5, num));
+                            setGridHeight(clamped);
+                            if (originalImage) reprocessImage();
+                          }}
+                          className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="输入高度 (5-200)"
                         />
                       </div>
                       <p className="text-xs text-gray-500">当前尺寸: {gridWidth} × {gridHeight}</p>
@@ -1196,7 +1263,7 @@ export default function BeadGenerator() {
                       min={200} max={1000} step={50}
                       value={[maxImageSize]}
                       onValueChange={([value]) => setMaxImageSize(value)}
-                      onValueCommit={() => originalImage && handleFileUpload(fileInputRef.current?.files?.[0] as File)}
+                      onValueCommit={() => originalImage && reprocessImage()}
                     />
                   </div>
                 </CardContent>
