@@ -106,7 +106,7 @@ export default function BeadGenerator() {
         if (color) categories.add(color.category);
       });
       
-      // 根据画布类型确定处理尺寸
+      // 根据画布类型确定目标尺寸
       let targetWidth = gridWidth;
       let targetHeight = gridHeight;
       
@@ -115,9 +115,15 @@ export default function BeadGenerator() {
         targetHeight = HEXAGON_HEIGHT;
       }
       
-      // 使用目标宽度和高度的平均值
-      const avgGridSize = Math.round((targetWidth + targetHeight) / 2);
-      let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+      // 直接使用目标尺寸作为 gridSize
+      let result = processImageToBeads(imageData, targetWidth, Array.from(categories));
+      
+      // 确保输出的高度与目标一致
+      if (result.height !== targetHeight) {
+        // 需要调整高度 - 使用平均值重新计算
+        const avgSize = Math.round((targetWidth + targetHeight) / 2);
+        result = processImageToBeads(imageData, avgSize, Array.from(categories));
+      }
       
       // 对于六角板，需要裁剪成六角形
       if (canvasType === 'hexagon') {
@@ -250,7 +256,7 @@ export default function BeadGenerator() {
           if (color) categories.add(color.category);
         });
         
-        // 根据画布类型确定处理尺寸
+        // 根据画布类型确定目标尺寸
         let targetWidth = gridWidth;
         let targetHeight = gridHeight;
         
@@ -259,8 +265,15 @@ export default function BeadGenerator() {
           targetHeight = HEXAGON_HEIGHT;
         }
         
-        const avgGridSize = Math.round((targetWidth + targetHeight) / 2);
-        let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+        // 直接使用目标尺寸作为 gridSize
+        let result = processImageToBeads(imageData, targetWidth, Array.from(categories));
+        
+        // 确保输出的高度与目标一致
+        if (result.height !== targetHeight) {
+          // 需要调整高度 - 使用平均值重新计算
+          const avgSize = Math.round((targetWidth + targetHeight) / 2);
+          result = processImageToBeads(imageData, avgSize, Array.from(categories));
+        }
         
         // 对于六角板，需要裁剪成六角形
         if (canvasType === 'hexagon') {
@@ -409,13 +422,12 @@ export default function BeadGenerator() {
     setCanvasOffset({ x: 0, y: 0 });
   }, []);
 
-  // 应用预设 - 只设置尺寸和类型参数，不创建空白画布
+  // 应用预设 - 矩形和斜板只设置参数，六角板需要创建空白画布
   const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
     switch (preset) {
       case 'hexagon':
-        setCanvasType('hexagon');
-        setGridWidth(HEXAGON_MAX_WIDTH);
-        setGridHeight(HEXAGON_HEIGHT);
+        // 六角板需要创建空白画布，因为它的结构特殊
+        createBlankCanvas(HEXAGON_MAX_WIDTH, HEXAGON_HEIGHT, 'hexagon');
         break;
       case 'small-square':
         setCanvasType('rect');
@@ -433,7 +445,7 @@ export default function BeadGenerator() {
         setGridHeight(21);
         break;
     }
-  }, []);
+  }, [createBlankCanvas]);
 
   // 颜色类别展开/收起
   const toggleCategoryExpand = (category: ColorCategory) => {
@@ -528,7 +540,7 @@ export default function BeadGenerator() {
         } else if (canvasType === 'diagonal') {
           rowWidth = width;
           // 奇数行偏移半个珠子
-          offsetX = (y % 2 === 0) ? 0.5 : 0;
+          offsetX = (y % 2 === 1) ? 0.5 : 0;
         } else {
           rowWidth = width;
           offsetX = 0;
@@ -581,7 +593,7 @@ export default function BeadGenerator() {
         offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
       } else if (canvasType === 'diagonal') {
         // 奇数行偏移半个珠子
-        offsetX = (y % 2 === 0) ? 0.5 : 0;
+        offsetX = (y % 2 === 1) ? 0.5 : 0;
       } else {
         offsetX = 0;
       }
@@ -695,7 +707,7 @@ export default function BeadGenerator() {
       offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
     } else if (canvasType === 'diagonal') {
       // 斜板奇数行偏移半个珠子
-      offsetX = (y % 2 === 0) ? 0.5 : 0;
+      offsetX = (y % 2 === 1) ? 0.5 : 0;
     } else {
       offsetX = 0;
     }
