@@ -76,6 +76,20 @@ export default function BeadGenerator() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // 使用 ref 保存最新的参数值，解决闭包问题
+  const gridWidthRef = useRef(gridWidth);
+  const gridHeightRef = useRef(gridHeight);
+  const canvasTypeRef = useRef(canvasType);
+  const maxImageSizeRef = useRef(maxImageSize);
+  const selectedColorIdsRef = useRef(selectedColorIds);
+  
+  // 同步 ref 和 state
+  useEffect(() => { gridWidthRef.current = gridWidth; }, [gridWidth]);
+  useEffect(() => { gridHeightRef.current = gridHeight; }, [gridHeight]);
+  useEffect(() => { canvasTypeRef.current = canvasType; }, [canvasType]);
+  useEffect(() => { maxImageSizeRef.current = maxImageSize; }, [maxImageSize]);
+  useEffect(() => { selectedColorIdsRef.current = selectedColorIds; }, [selectedColorIds]);
 
   // 获取当前选中的颜色列表
   const getSelectedColors = useCallback(() => {
@@ -83,7 +97,8 @@ export default function BeadGenerator() {
   }, [selectedColorIds]);
 
   // 处理图片上传
-  const handleFileUpload = useCallback(async (file: File) => {
+  // 处理图片上传 - 使用 ref 确保总是获取最新参数值
+  const handleFileUpload = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('请上传图片文件');
       return;
@@ -92,8 +107,15 @@ export default function BeadGenerator() {
     try {
       setIsProcessing(true);
       
+      // 使用 ref 获取最新值
+      const currentGridWidth = gridWidthRef.current;
+      const currentGridHeight = gridHeightRef.current;
+      const currentCanvasType = canvasTypeRef.current;
+      const currentMaxImageSize = maxImageSizeRef.current;
+      const currentSelectedColorIds = selectedColorIdsRef.current;
+      
       const canvas = await loadImageToCanvas(file);
-      const resizedCanvas = resizeImage(canvas, maxImageSize);
+      const resizedCanvas = resizeImage(canvas, currentMaxImageSize);
       setOriginalImage(resizedCanvas.toDataURL());
       
       const ctx = resizedCanvas.getContext('2d')!;
@@ -101,7 +123,7 @@ export default function BeadGenerator() {
       
       // 根据选中的颜色获取类别
       const categories = new Set<ColorCategory>();
-      selectedColorIds.forEach(id => {
+      currentSelectedColorIds.forEach(id => {
         const color = ALL_COLORS.find(c => c.id === id);
         if (color) categories.add(color.category);
       });
@@ -111,12 +133,12 @@ export default function BeadGenerator() {
         categories.add('normal');
       }
       
-      // 直接使用 gridWidth 作为处理尺寸
-      const targetSize = gridWidth;
+      // 直接使用当前的 gridWidth 作为处理尺寸
+      const targetSize = currentGridWidth;
       let result = processImageToBeads(imageData, targetSize, Array.from(categories));
       
       // 对于六角板，需要裁剪成六角形
-      if (canvasType === 'hexagon') {
+      if (currentCanvasType === 'hexagon') {
         const hexBeads: ProcessedBead[][] = [];
         for (let y = 0; y < HEXAGON_HEIGHT; y++) {
           const rowWidth = HEXAGON_PATTERN[y];
@@ -137,15 +159,16 @@ export default function BeadGenerator() {
         result.height = HEXAGON_HEIGHT;
       }
       
-      // 过滤结果，只使用选中的颜色
+      // 获取当前选中的颜色
       const selectedColors = getSelectedColors();
       // 如果没有选中的颜色，使用所有颜色
       const colorsToUse = selectedColors.length > 0 ? selectedColors : ALL_COLORS;
       
+      // 过滤结果，只使用选中的颜色
       result.beads = result.beads.map(row => 
         row.map(bead => {
           // 如果当前颜色不在选中列表中，找最接近的选中颜色
-          if (!selectedColorIds.has(bead.color.id)) {
+          if (!currentSelectedColorIds.has(bead.color.id)) {
             return {
               ...bead,
               color: findClosestColor(bead.originalRgb, colorsToUse)
@@ -176,7 +199,7 @@ export default function BeadGenerator() {
     } finally {
       setIsProcessing(false);
     }
-  }, [gridWidth, gridHeight, maxImageSize, selectedColorIds, getSelectedColors, canvasType]);
+  };
 
   // 在选中颜色中找最接近的颜色
   const findClosestColor = (rgb: [number, number, number], colors: BeadColor[]): BeadColor => {
@@ -227,8 +250,15 @@ export default function BeadGenerator() {
   };
 
   // 重新处理图片
-  const reprocessImage = useCallback(async () => {
+  // 重新处理图片 - 使用 ref 确保总是获取最新参数值
+  const reprocessImage = async () => {
     if (!originalImage) return;
+    
+    // 使用 ref 获取最新值
+    const currentGridWidth = gridWidthRef.current;
+    const currentGridHeight = gridHeightRef.current;
+    const currentCanvasType = canvasTypeRef.current;
+    const currentSelectedColorIds = selectedColorIdsRef.current;
     
     try {
       setIsProcessing(true);
@@ -244,7 +274,7 @@ export default function BeadGenerator() {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
         const categories = new Set<ColorCategory>();
-        selectedColorIds.forEach(id => {
+        currentSelectedColorIds.forEach(id => {
           const color = ALL_COLORS.find(c => c.id === id);
           if (color) categories.add(color.category);
         });
@@ -254,12 +284,12 @@ export default function BeadGenerator() {
           categories.add('normal');
         }
         
-        // 直接使用 gridWidth 作为处理尺寸
-        const targetSize = gridWidth;
+        // 直接使用当前的 gridWidth 作为处理尺寸
+        const targetSize = currentGridWidth;
         let result = processImageToBeads(imageData, targetSize, Array.from(categories));
         
         // 对于六角板，需要裁剪成六角形
-        if (canvasType === 'hexagon') {
+        if (currentCanvasType === 'hexagon') {
           const hexBeads: ProcessedBead[][] = [];
           for (let y = 0; y < HEXAGON_HEIGHT; y++) {
             const rowWidth = HEXAGON_PATTERN[y];
@@ -287,7 +317,7 @@ export default function BeadGenerator() {
         
         result.beads = result.beads.map(row => 
           row.map(bead => {
-            if (!selectedColorIds.has(bead.color.id)) {
+            if (!currentSelectedColorIds.has(bead.color.id)) {
               return {
                 ...bead,
                 color: findClosestColor(bead.originalRgb, colorsToUse)
@@ -318,7 +348,7 @@ export default function BeadGenerator() {
       console.error('重新处理失败:', error);
       setIsProcessing(false);
     }
-  }, [originalImage, gridWidth, gridHeight, selectedColorIds, getSelectedColors, canvasType]);
+  };
 
   // 创建空白画布
   const createBlankCanvas = useCallback((width: number, height: number, type: CanvasType = 'rect') => {
@@ -1478,7 +1508,23 @@ export default function BeadGenerator() {
                       min={5}
                       max={100}
                       value={blankCanvasWidth}
-                      onChange={(e) => setBlankCanvasWidth(Math.min(100, Math.max(5, parseInt(e.target.value) || 5)))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        // 允许用户自由输入，包括空值
+                        if (val === '') {
+                          setBlankCanvasWidth(5);
+                        } else {
+                          const num = parseInt(val);
+                          if (!isNaN(num)) {
+                            setBlankCanvasWidth(num);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        // 失焦时限制范围
+                        const num = parseInt(e.target.value) || 5;
+                        setBlankCanvasWidth(Math.min(100, Math.max(5, num)));
+                      }}
                       className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="输入宽度 (5-100)"
                     />
@@ -1498,7 +1544,21 @@ export default function BeadGenerator() {
                       min={5}
                       max={100}
                       value={blankCanvasHeight}
-                      onChange={(e) => setBlankCanvasHeight(Math.min(100, Math.max(5, parseInt(e.target.value) || 5)))}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setBlankCanvasHeight(5);
+                        } else {
+                          const num = parseInt(val);
+                          if (!isNaN(num)) {
+                            setBlankCanvasHeight(num);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const num = parseInt(e.target.value) || 5;
+                        setBlankCanvasHeight(Math.min(100, Math.max(5, num)));
+                      }}
                       className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="输入高度 (5-100)"
                     />
