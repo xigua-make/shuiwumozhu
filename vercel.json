@@ -3,5 +3,6 @@
   "buildCommand": "pnpm install && pnpm run build:vercel",
   "installCommand": "pnpm install",
   "framework": "nextjs",
-  "regions": ["hkg1"]
+  "regions": ["hkg1"],
+  "outputDirectory": "out"
 }
