@@ -392,27 +392,20 @@ export default function BeadGenerator() {
     setCanvasOffset({ x: 0, y: 0 });
   }, []);
 
-  // 应用预设 - 设置参数
+  // 应用预设 - 创建空白画布
   const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
     switch (preset) {
       case 'hexagon':
-        // 六角板需要创建空白画布，因为它的结构特殊
         createBlankCanvas(HEXAGON_MAX_WIDTH, HEXAGON_HEIGHT, 'hexagon');
         break;
       case 'small-square':
-        setCanvasType('rect');
-        setGridWidth(16);
-        setGridHeight(16);
+        createBlankCanvas(16, 16, 'rect');
         break;
       case 'large-square':
-        setCanvasType('rect');
-        setGridWidth(21);
-        setGridHeight(21);
+        createBlankCanvas(21, 21, 'rect');
         break;
       case 'diagonal':
-        setCanvasType('diagonal');
-        setGridWidth(21);
-        setGridHeight(21);
+        createBlankCanvas(21, 21, 'diagonal');
         break;
     }
   }, [createBlankCanvas]);
