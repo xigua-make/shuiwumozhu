@@ -46,6 +46,8 @@ export default function BeadGenerator() {
   const [maxImageSize, setMaxImageSize] = useState(300);
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
+  const [showCoordinates, setShowCoordinates] = useState(true);
+  const [showBackgroundBeads, setShowBackgroundBeads] = useState(true);
   const [isFileDragging, setIsFileDragging] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   
@@ -425,7 +427,7 @@ export default function BeadGenerator() {
     const { beads, width, height } = processedResult;
     const beadSize = 18 * canvasZoom;
     
-    const padding = showLabels ? 45 : 15;
+    const padding = showCoordinates ? 45 : 15;
     
     // 对于六角板和斜板，宽度取最大值
     let canvasWidth = width;
@@ -473,35 +475,32 @@ export default function BeadGenerator() {
       }
     }
     
-    // 绘制标签
-    if (showLabels) {
-      ctx.fillStyle = '#999999';
+    // 绘制坐标标签（每行每列都显示）
+    if (showCoordinates) {
+      ctx.fillStyle = '#666666';
       ctx.font = `${11 * canvasZoom}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       if (canvasType === 'hexagon') {
-        // 六角板标签 - 只显示行号
+        // 六角板标签 - 显示行号
         for (let y = 0; y < height; y++) {
-          if (y % 2 === 0 || y === height - 1) {
-            ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
-          }
+          ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
         }
       } else {
-        // 矩形和斜板标签
+        // 矩形和斜板标签 - 每行每列都显示
         for (let x = 0; x < width; x++) {
-          if (x % 5 === 0 || x === width - 1) {
-            ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
-          }
+          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
         }
         
         for (let y = 0; y < height; y++) {
-          if (y % 5 === 0 || y === height - 1) {
-            ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
-          }
+          ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
         }
       }
     }
+    
+    // 获取奶白色（背景珠子颜色）
+    const defaultColor = ALL_COLORS.find(c => c.name === '奶白色') || ALL_COLORS[0];
     
     // 绘制圆形珠子
     for (let y = 0; y < height; y++) {
@@ -520,6 +519,12 @@ export default function BeadGenerator() {
       
       for (let x = 0; x < rowWidth; x++) {
         const bead = row[x];
+        
+        // 如果不显示背景珠子，且是奶白色，则跳过
+        if (!showBackgroundBeads && bead.color.id === defaultColor.id) {
+          continue;
+        }
+        
         const cx = padding + (offsetX + x) * beadSize + beadSize / 2;
         const cy = padding + y * beadSize + beadSize / 2;
         const radius = (beadSize / 2) - 1.5 * canvasZoom;
@@ -550,7 +555,7 @@ export default function BeadGenerator() {
         }
       }
     }
-  }, [processedResult, canvasZoom, showGrid, showLabels, canvasType]);
+  }, [processedResult, canvasZoom, showGrid, showCoordinates, showBackgroundBeads, canvasType]);
 
   // Canvas 交互 - 拖拽/画笔/橡皮擦/替换
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -1056,6 +1061,41 @@ export default function BeadGenerator() {
                       <p className="text-sm text-blue-700">斜板: {gridWidth}×{gridHeight} = {gridWidth * gridHeight}颗珠子（交错排列）</p>
                     </div>
                   )}
+                  
+                  {/* 显示选项 */}
+                  <div className="space-y-3">
+                    <Label className="text-sm">显示选项</Label>
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">显示坐标</span>
+                        <input 
+                          type="checkbox" 
+                          checked={showCoordinates}
+                          onChange={(e) => setShowCoordinates(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">显示网格</span>
+                        <input 
+                          type="checkbox" 
+                          checked={showGrid}
+                          onChange={(e) => setShowGrid(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600">显示珠子</span>
+                        <input 
+                          type="checkbox" 
+                          checked={showBackgroundBeads}
+                          onChange={(e) => setShowBackgroundBeads(e.target.checked)}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400">关闭"显示珠子"将隐藏未上色的珠子</p>
+                  </div>
                   
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
