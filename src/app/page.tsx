@@ -106,6 +106,11 @@ export default function BeadGenerator() {
         if (color) categories.add(color.category);
       });
       
+      // 如果没有选中颜色，使用默认的普通款颜色
+      if (categories.size === 0) {
+        categories.add('normal');
+      }
+      
       // 直接使用 gridWidth 作为处理尺寸
       const targetSize = gridWidth;
       let result = processImageToBeads(imageData, targetSize, Array.from(categories));
@@ -134,13 +139,16 @@ export default function BeadGenerator() {
       
       // 过滤结果，只使用选中的颜色
       const selectedColors = getSelectedColors();
+      // 如果没有选中的颜色，使用所有颜色
+      const colorsToUse = selectedColors.length > 0 ? selectedColors : ALL_COLORS;
+      
       result.beads = result.beads.map(row => 
         row.map(bead => {
           // 如果当前颜色不在选中列表中，找最接近的选中颜色
           if (!selectedColorIds.has(bead.color.id)) {
             return {
               ...bead,
-              color: findClosestColor(bead.originalRgb, selectedColors)
+              color: findClosestColor(bead.originalRgb, colorsToUse)
             };
           }
           return bead;
@@ -241,6 +249,11 @@ export default function BeadGenerator() {
           if (color) categories.add(color.category);
         });
         
+        // 如果没有选中颜色，使用默认的普通款颜色
+        if (categories.size === 0) {
+          categories.add('normal');
+        }
+        
         // 直接使用 gridWidth 作为处理尺寸
         const targetSize = gridWidth;
         let result = processImageToBeads(imageData, targetSize, Array.from(categories));
@@ -269,12 +282,15 @@ export default function BeadGenerator() {
         
         // 过滤结果
         const selectedColors = getSelectedColors();
+        // 如果没有选中的颜色，使用所有颜色
+        const colorsToUse = selectedColors.length > 0 ? selectedColors : ALL_COLORS;
+        
         result.beads = result.beads.map(row => 
           row.map(bead => {
             if (!selectedColorIds.has(bead.color.id)) {
               return {
                 ...bead,
-                color: findClosestColor(bead.originalRgb, selectedColors)
+                color: findClosestColor(bead.originalRgb, colorsToUse)
               };
             }
             return bead;
