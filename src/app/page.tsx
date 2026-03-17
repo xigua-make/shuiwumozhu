@@ -240,9 +240,13 @@ export default function BeadGenerator() {
 
   // 文件选择
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('handleFileSelect called');
     const file = e.target.files?.[0];
+    console.log('Selected file:', file?.name, file?.type, file?.size);
     if (file) {
       handleFileUpload(file);
+      // 重置 input 以便可以再次选择同一文件
+      e.target.value = '';
     }
   };
 
@@ -1352,7 +1356,7 @@ export default function BeadGenerator() {
                                 <div className="grid grid-cols-6 gap-2">
                                   {NORMAL_COLORS.map(c => (
                                     <Tooltip key={c.id}>
-                                      <TooltipTrigger>
+                                      <TooltipTrigger asChild>
                                         <div
                                           className={`flex flex-col items-center p-1.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
                                           onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
@@ -1382,7 +1386,7 @@ export default function BeadGenerator() {
                                 <div className="grid grid-cols-4 gap-2">
                                   {GLOW_COLORS.map(c => (
                                     <Tooltip key={c.id}>
-                                      <TooltipTrigger>
+                                      <TooltipTrigger asChild>
                                         <div
                                           className={`flex flex-col items-center p-1.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
                                           onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
@@ -1412,7 +1416,7 @@ export default function BeadGenerator() {
                                 <div className="grid grid-cols-4 gap-2">
                                   {CRYSTAL_COLORS.map(c => (
                                     <Tooltip key={c.id}>
-                                      <TooltipTrigger>
+                                      <TooltipTrigger asChild>
                                         <div
                                           className={`flex flex-col items-center p-1.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
                                           onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
@@ -1439,7 +1443,7 @@ export default function BeadGenerator() {
                       
                       <div className="flex items-center gap-1 ml-auto">
                         <Tooltip>
-                          <TooltipTrigger>
+                          <TooltipTrigger asChild>
                             <Button 
                               variant="outline" 
                               size="sm" 
@@ -1520,7 +1524,7 @@ export default function BeadGenerator() {
                         .sort((a, b) => b.count - a.count)
                         .map((stat) => (
                           <Tooltip key={stat.color.id}>
-                            <TooltipTrigger>
+                            <TooltipTrigger asChild>
                               <div 
                                 className="flex items-center gap-2 px-3 py-2 rounded-lg border bg-white hover:shadow cursor-pointer"
                                 onClick={() => handleColorReplace(stat.color)}
@@ -1679,7 +1683,7 @@ export default function BeadGenerator() {
                     <div className="grid grid-cols-4 gap-2">
                       {NORMAL_COLORS.map(c => (
                         <Tooltip key={c.id}>
-                          <TooltipTrigger>
+                          <TooltipTrigger asChild>
                             <div
                               className={`flex flex-col items-center p-2 rounded cursor-pointer hover:bg-gray-100`}
                               onClick={() => executeColorReplace(c)}
@@ -1706,7 +1710,7 @@ export default function BeadGenerator() {
                     <div className="grid grid-cols-4 gap-2">
                       {GLOW_COLORS.map(c => (
                         <Tooltip key={c.id}>
-                          <TooltipTrigger>
+                          <TooltipTrigger asChild>
                             <div
                               className={`flex flex-col items-center p-2 rounded cursor-pointer hover:bg-gray-100`}
                               onClick={() => executeColorReplace(c)}
@@ -1733,7 +1737,7 @@ export default function BeadGenerator() {
                     <div className="grid grid-cols-4 gap-2">
                       {CRYSTAL_COLORS.map(c => (
                         <Tooltip key={c.id}>
-                          <TooltipTrigger>
+                          <TooltipTrigger asChild>
                             <div
                               className={`flex flex-col items-center p-2 rounded cursor-pointer hover:bg-gray-100`}
                               onClick={() => executeColorReplace(c)}
