@@ -563,7 +563,8 @@ export default function BeadGenerator() {
     const { beads, width, height } = processedResult;
     const beadSize = 18 * canvasZoom;
     
-    const padding = showCoordinates ? 65 : 15;
+    // 四周都需要留出坐标空间
+    const padding = showCoordinates ? 35 * canvasZoom : 15;
     
     // 对于六角板和斜板，宽度取最大值
     let canvasWidth = width;
@@ -576,6 +577,7 @@ export default function BeadGenerator() {
       canvasHeight = height + 0.5;
     }
     
+    // 画布尺寸需要加上四周的padding
     canvas.width = canvasWidth * beadSize + padding * 2;
     canvas.height = canvasHeight * beadSize + padding * 2;
     
@@ -615,26 +617,72 @@ export default function BeadGenerator() {
       }
     }
     
-    // 绘制坐标标签（每行每列都显示）
+    // 绘制坐标标签（四周都显示，圆形背景）
     if (showCoordinates) {
-      ctx.fillStyle = '#666666';
-      ctx.font = `${14 * canvasZoom}px Arial`;
+      ctx.font = `bold ${12 * canvasZoom}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       if (canvasType === 'hexagon') {
-        // 六角板标签 - 显示行号
+        // 六角板标签 - 只在左侧显示行号
         for (let y = 0; y < height; y++) {
-          ctx.fillText((y + 1).toString(), padding - 25 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          const rowWidth = HEXAGON_PATTERN[y] || 0;
+          const offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
+          // 左侧
+          const lx = padding - 20 * canvasZoom;
+          const ly = padding + y * beadSize + beadSize / 2;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 10 * canvasZoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#E0E0E0';
+          ctx.fill();
+          ctx.fillStyle = '#333333';
+          ctx.fillText((y + 1).toString(), lx, ly);
         }
       } else {
-        // 矩形和斜板标签 - 每行每列都显示
+        // 矩形和斜板标签 - 四周都显示
         for (let x = 0; x < width; x++) {
-          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 25 * canvasZoom);
+          // 斜板：偶数列向下偏移
+          const offsetY = (canvasType === 'diagonal' && x % 2 === 1) ? 0.5 * beadSize : 0;
+          
+          // 上方
+          const tx = padding + x * beadSize + beadSize / 2;
+          const ty = padding - 20 * canvasZoom;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 10 * canvasZoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#E0E0E0';
+          ctx.fill();
+          ctx.fillStyle = '#333333';
+          ctx.fillText((x + 1).toString(), tx, ty);
+          
+          // 下方
+          const by = padding + height * beadSize + offsetY + 20 * canvasZoom;
+          ctx.beginPath();
+          ctx.arc(tx, by, 10 * canvasZoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#E0E0E0';
+          ctx.fill();
+          ctx.fillStyle = '#333333';
+          ctx.fillText((x + 1).toString(), tx, by);
         }
         
         for (let y = 0; y < height; y++) {
-          ctx.fillText((y + 1).toString(), padding - 25 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          // 左侧
+          const lx = padding - 20 * canvasZoom;
+          const ly = padding + y * beadSize + beadSize / 2;
+          ctx.beginPath();
+          ctx.arc(lx, ly, 10 * canvasZoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#E0E0E0';
+          ctx.fill();
+          ctx.fillStyle = '#333333';
+          ctx.fillText((y + 1).toString(), lx, ly);
+          
+          // 右侧
+          const rx = padding + width * beadSize + 20 * canvasZoom;
+          ctx.beginPath();
+          ctx.arc(rx, ly, 10 * canvasZoom, 0, Math.PI * 2);
+          ctx.fillStyle = '#E0E0E0';
+          ctx.fill();
+          ctx.fillStyle = '#333333';
+          ctx.fillText((y + 1).toString(), rx, ly);
         }
       }
     }

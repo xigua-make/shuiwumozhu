@@ -179,7 +179,8 @@ export function exportBeadPattern(
   // 高清导出：使用2倍尺寸
   const scale = 2;
   const actualBeadSize = beadSize * scale;
-  const padding = showLabels ? 80 * scale : 25 * scale;
+  // 四周都需要留出坐标空间
+  const padding = showLabels ? 40 * scale : 25 * scale;
   
   // 计算画布尺寸
   let canvasWidth = width;
@@ -202,9 +203,12 @@ export function exportBeadPattern(
     statsHeight = 95 * scale + rows * 36 * scale; // 标题区域 + 每行高度
   }
   
+  // 下方坐标需要的额外空间
+  const coordSpace = showLabels ? 30 * scale : 0;
+  
   const canvas = document.createElement('canvas');
   canvas.width = canvasWidth * actualBeadSize + padding * 2;
-  canvas.height = canvasHeight * actualBeadSize + padding * 2 + statsHeight;
+  canvas.height = canvasHeight * actualBeadSize + padding + coordSpace + statsHeight;
   
   const ctx = canvas.getContext('2d')!;
   
@@ -239,26 +243,69 @@ export function exportBeadPattern(
     }
   }
   
-  // 绘制标签
+  // 绘制标签（四周都显示，圆形背景）
   if (showLabels) {
-    ctx.fillStyle = '#666666';
-    ctx.font = `${18 * scale}px Arial`;
+    ctx.font = `bold ${14 * scale}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
     if (canvasType === 'hexagon') {
-      // 六角板标签 - 显示行号
+      // 六角板标签 - 只在左侧显示行号
       for (let y = 0; y < height; y++) {
-        ctx.fillText((y + 1).toString(), padding - 32 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+        const rowWidth = HEXAGON_PATTERN[y] || 0;
+        const lx = padding - 22 * scale;
+        const ly = padding + y * actualBeadSize + actualBeadSize / 2;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 12 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fill();
+        ctx.fillStyle = '#333333';
+        ctx.fillText((y + 1).toString(), lx, ly);
       }
     } else {
-      // 矩形和斜板标签 - 每行每列都显示
+      // 矩形和斜板标签 - 四周都显示
       for (let x = 0; x < width; x++) {
-        ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 32 * scale);
+        const offsetY = (canvasType === 'diagonal' && x % 2 === 1) ? 0.5 * actualBeadSize : 0;
+        
+        // 上方
+        const tx = padding + x * actualBeadSize + actualBeadSize / 2;
+        const ty = padding - 22 * scale;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 12 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fill();
+        ctx.fillStyle = '#333333';
+        ctx.fillText((x + 1).toString(), tx, ty);
+        
+        // 下方
+        const by = padding + height * actualBeadSize + offsetY + 22 * scale;
+        ctx.beginPath();
+        ctx.arc(tx, by, 12 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fill();
+        ctx.fillStyle = '#333333';
+        ctx.fillText((x + 1).toString(), tx, by);
       }
       
       for (let y = 0; y < height; y++) {
-        ctx.fillText((y + 1).toString(), padding - 32 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+        // 左侧
+        const lx = padding - 22 * scale;
+        const ly = padding + y * actualBeadSize + actualBeadSize / 2;
+        ctx.beginPath();
+        ctx.arc(lx, ly, 12 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fill();
+        ctx.fillStyle = '#333333';
+        ctx.fillText((y + 1).toString(), lx, ly);
+        
+        // 右侧
+        const rx = padding + width * actualBeadSize + 22 * scale;
+        ctx.beginPath();
+        ctx.arc(rx, ly, 12 * scale, 0, Math.PI * 2);
+        ctx.fillStyle = '#E0E0E0';
+        ctx.fill();
+        ctx.fillStyle = '#333333';
+        ctx.fillText((y + 1).toString(), rx, ly);
       }
     }
   }
@@ -314,7 +361,9 @@ export function exportBeadPattern(
 
   // 绘制用料统计
   if (colorStats && colorStats.size > 0) {
-    const statsY = canvasHeight * actualBeadSize + padding * 2 + 25 * scale;
+    // 统计区域起始位置：画布高度 + 下方坐标空间 + padding
+    const coordSpace = showLabels ? 30 * scale : 0; // 下方坐标的空间
+    const statsY = canvasHeight * actualBeadSize + padding + coordSpace + 25 * scale;
     
     // 分隔线
     ctx.strokeStyle = '#E0E0E0';
