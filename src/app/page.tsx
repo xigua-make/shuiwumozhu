@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, Download, Copy, Settings, RotateCcw, ZoomIn, ZoomOut, Eye, EyeOff, Palette } from 'lucide-react';
+import { 
+  Upload, Download, Copy, Settings, RotateCcw, ZoomIn, ZoomOut, 
+  Paintbrush, Eraser, MousePointer, Replace, ChevronDown, ChevronUp, X, Check
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   ProcessResult, 
   processImageToBeads, 
@@ -20,7 +21,12 @@ import {
   copyColorList,
   resizeImage
 } from '@/lib/image-processor';
-import { NORMAL_COLORS, GLOW_COLORS, CRYSTAL_COLORS, ColorCategory, BeadColor } from '@/lib/bead-colors';
+import { 
+  NORMAL_COLORS, GLOW_COLORS, CRYSTAL_COLORS, 
+  ColorCategory, BeadColor, ALL_COLORS, getColorsByCategories 
+} from '@/lib/bead-colors';
+
+type EditMode = 'none' | 'brush' | 'eraser' | 'replace';
 
 export default function BeadGenerator() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -28,14 +34,32 @@ export default function BeadGenerator() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [gridSize, setGridSize] = useState(20);
   const [maxImageSize, setMaxImageSize] = useState(300);
-  const [beadSize, setBeadSize] = useState(18);
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
-  const [colorCategories, setColorCategories] = useState<ColorCategory[]>(['normal']);
+  
+  // 颜色选择相关
+  const [selectedColorIds, setSelectedColorIds] = useState<Set<string>>(new Set(NORMAL_COLORS.map(c => c.id)));
+  const [expandedCategories, setExpandedCategories] = useState<Set<ColorCategory>>(new Set(['normal']));
+  
+  // 编辑相关
+  const [editMode, setEditMode] = useState<EditMode>('none');
+  const [selectedPaintColor, setSelectedPaintColor] = useState<BeadColor | null>(null);
+  const [canvasZoom, setCanvasZoom] = useState(1);
+  
+  // 替换颜色功能
+  const [replaceFromColor, setReplaceFromColor] = useState<BeadColor | null>(null);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 获取当前选中的颜色列表
+  const getSelectedColors = useCallback(() => {
+    return ALL_COLORS.filter(c => selectedColorIds.has(c.id));
+  }, [selectedColorIds]);
 
   // 处理图片上传
   const handleFileUpload = useCallback(async (file: File) => {
@@ -47,19 +71,50 @@ export default function BeadGenerator() {
     try {
       setIsProcessing(true);
       
-      // 加载图片
       const canvas = await loadImageToCanvas(file);
-      
-      // 缩放图片
       const resizedCanvas = resizeImage(canvas, maxImageSize);
-      
-      // 保存原图预览
       setOriginalImage(resizedCanvas.toDataURL());
       
-      // 处理图片
       const ctx = resizedCanvas.getContext('2d')!;
       const imageData = ctx.getImageData(0, 0, resizedCanvas.width, resizedCanvas.height);
-      const result = processImageToBeads(imageData, gridSize, colorCategories);
+      
+      // 根据选中的颜色获取类别
+      const categories = new Set<ColorCategory>();
+      selectedColorIds.forEach(id => {
+        const color = ALL_COLORS.find(c => c.id === id);
+        if (color) categories.add(color.category);
+      });
+      
+      const result = processImageToBeads(imageData, gridSize, Array.from(categories));
+      
+      // 过滤结果，只使用选中的颜色
+      const selectedColors = getSelectedColors();
+      result.beads = result.beads.map(row => 
+        row.map(bead => {
+          // 如果当前颜色不在选中列表中，找最接近的选中颜色
+          if (!selectedColorIds.has(bead.color.id)) {
+            return {
+              ...bead,
+              color: findClosestColor(bead.originalRgb, selectedColors)
+            };
+          }
+          return bead;
+        })
+      );
+      
+      // 重新统计颜色
+      const newColorStats = new Map<string, { color: BeadColor; count: number }>();
+      result.beads.forEach(row => {
+        row.forEach(bead => {
+          const key = bead.color.id;
+          if (newColorStats.has(key)) {
+            newColorStats.get(key)!.count++;
+          } else {
+            newColorStats.set(key, { color: bead.color, count: 1 });
+          }
+        });
+      });
+      result.colorStats = newColorStats;
       
       setProcessedResult(result);
     } catch (error) {
@@ -68,7 +123,27 @@ export default function BeadGenerator() {
     } finally {
       setIsProcessing(false);
     }
-  }, [gridSize, maxImageSize, colorCategories]);
+  }, [gridSize, maxImageSize, selectedColorIds, getSelectedColors]);
+
+  // 在选中颜色中找最接近的颜色
+  const findClosestColor = (rgb: [number, number, number], colors: BeadColor[]): BeadColor => {
+    let closest = colors[0];
+    let minDist = Infinity;
+    
+    for (const color of colors) {
+      const dist = Math.sqrt(
+        Math.pow(rgb[0] - color.rgb[0], 2) +
+        Math.pow(rgb[1] - color.rgb[1], 2) +
+        Math.pow(rgb[2] - color.rgb[2], 2)
+      );
+      if (dist < minDist) {
+        minDist = dist;
+        closest = color;
+      }
+    }
+    
+    return closest;
+  };
 
   // 文件选择
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -92,14 +167,13 @@ export default function BeadGenerator() {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileUpload(file);
     }
   };
 
-  // 重新处理图片（当参数改变时）
+  // 重新处理图片
   const reprocessImage = useCallback(async () => {
     if (!originalImage) return;
     
@@ -115,7 +189,42 @@ export default function BeadGenerator() {
         ctx.drawImage(img, 0, 0);
         
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const result = processImageToBeads(imageData, gridSize, colorCategories);
+        
+        const categories = new Set<ColorCategory>();
+        selectedColorIds.forEach(id => {
+          const color = ALL_COLORS.find(c => c.id === id);
+          if (color) categories.add(color.category);
+        });
+        
+        const result = processImageToBeads(imageData, gridSize, Array.from(categories));
+        
+        // 过滤结果
+        const selectedColors = getSelectedColors();
+        result.beads = result.beads.map(row => 
+          row.map(bead => {
+            if (!selectedColorIds.has(bead.color.id)) {
+              return {
+                ...bead,
+                color: findClosestColor(bead.originalRgb, selectedColors)
+              };
+            }
+            return bead;
+          })
+        );
+        
+        const newColorStats = new Map<string, { color: BeadColor; count: number }>();
+        result.beads.forEach(row => {
+          row.forEach(bead => {
+            const key = bead.color.id;
+            if (newColorStats.has(key)) {
+              newColorStats.get(key)!.count++;
+            } else {
+              newColorStats.set(key, { color: bead.color, count: 1 });
+            }
+          });
+        });
+        result.colorStats = newColorStats;
+        
         setProcessedResult(result);
         setIsProcessing(false);
       };
@@ -124,14 +233,68 @@ export default function BeadGenerator() {
       console.error('重新处理失败:', error);
       setIsProcessing(false);
     }
-  }, [originalImage, gridSize, colorCategories]);
+  }, [originalImage, gridSize, selectedColorIds, getSelectedColors]);
 
-  // 绘制图纸到 Canvas（水雾魔珠样式：圆形珠子 + 点阵网格）
+  // 颜色类别展开/收起
+  const toggleCategoryExpand = (category: ColorCategory) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(category)) {
+        newSet.delete(category);
+      } else {
+        newSet.add(category);
+      }
+      return newSet;
+    });
+  };
+
+  // 选择/取消选择某个颜色
+  const toggleColorSelection = (colorId: string) => {
+    setSelectedColorIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(colorId)) {
+        if (newSet.size > 1) {
+          newSet.delete(colorId);
+        }
+      } else {
+        newSet.add(colorId);
+      }
+      return newSet;
+    });
+  };
+
+  // 选择/取消选择整个类别
+  const toggleCategorySelection = (category: ColorCategory) => {
+    const categoryColors = category === 'normal' ? NORMAL_COLORS 
+      : category === 'glow' ? GLOW_COLORS 
+      : CRYSTAL_COLORS;
+    
+    setSelectedColorIds(prev => {
+      const newSet = new Set(prev);
+      const allSelected = categoryColors.every(c => newSet.has(c.id));
+      
+      if (allSelected) {
+        // 取消选择该类别所有颜色（至少保留一个）
+        const otherColorsCount = prev.size - categoryColors.length;
+        if (otherColorsCount > 0) {
+          categoryColors.forEach(c => newSet.delete(c.id));
+        }
+      } else {
+        // 选择该类别所有颜色
+        categoryColors.forEach(c => newSet.add(c.id));
+      }
+      
+      return newSet;
+    });
+  };
+
+  // 绘制图纸到 Canvas
   useEffect(() => {
     if (!processedResult || !canvasRef.current) return;
     
     const canvas = canvasRef.current;
     const { beads, width, height } = processedResult;
+    const beadSize = 18 * canvasZoom;
     
     const padding = showLabels ? 45 : 15;
     canvas.width = width * beadSize + padding * 2;
@@ -143,16 +306,15 @@ export default function BeadGenerator() {
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // 绘制点阵网格（小圆点）
+    // 绘制点阵网格
     if (showGrid) {
       ctx.fillStyle = '#E5E5E5';
       for (let y = 0; y <= height; y++) {
         for (let x = 0; x <= width; x++) {
           const px = padding + x * beadSize;
           const py = padding + y * beadSize;
-          
           ctx.beginPath();
-          ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+          ctx.arc(px, py, 1.5 * canvasZoom, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -161,21 +323,19 @@ export default function BeadGenerator() {
     // 绘制标签
     if (showLabels) {
       ctx.fillStyle = '#999999';
-      ctx.font = '11px Arial';
+      ctx.font = `${11 * canvasZoom}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      // 列标签
       for (let x = 0; x < width; x++) {
         if (x % 5 === 0 || x === width - 1) {
-          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18);
+          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
         }
       }
       
-      // 行标签
       for (let y = 0; y < height; y++) {
         if (y % 5 === 0 || y === height - 1) {
-          ctx.fillText((y + 1).toString(), padding - 18, padding + y * beadSize + beadSize / 2);
+          ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
         }
       }
     }
@@ -186,24 +346,19 @@ export default function BeadGenerator() {
         const bead = beads[y][x];
         const cx = padding + x * beadSize + beadSize / 2;
         const cy = padding + y * beadSize + beadSize / 2;
-        const radius = (beadSize / 2) - 1.5; // 稍微缩小一点，留出间隙
+        const radius = (beadSize / 2) - 1.5 * canvasZoom;
         
         if (radius > 0) {
-          // 绘制圆形珠子
           ctx.beginPath();
           ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-          
-          // 填充颜色
           ctx.fillStyle = bead.color.hex;
           ctx.fill();
           
-          // 添加微妙的边框
           ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-          ctx.lineWidth = 0.5;
+          ctx.lineWidth = 0.5 * canvasZoom;
           ctx.stroke();
           
-          // 添加高光效果（让珠子更立体）
-          const highlightRadius = radius * 0.6;
+          // 高光
           const gradient = ctx.createRadialGradient(
             cx - radius * 0.3, cy - radius * 0.3, 0,
             cx, cy, radius
@@ -219,22 +374,154 @@ export default function BeadGenerator() {
         }
       }
     }
-  }, [processedResult, beadSize, showGrid, showLabels]);
+  }, [processedResult, canvasZoom, showGrid, showLabels]);
 
-  // 导出图片
+  // Canvas 交互 - 画笔/橡皮擦/替换
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!processedResult || editMode === 'none') return;
+    
+    handleCanvasInteraction(e);
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!processedResult || editMode === 'none') return;
+    if (e.buttons !== 1) return; // 只在左键按下时处理
+    
+    handleCanvasInteraction(e);
+  };
+
+  const handleCanvasInteraction = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!processedResult || !canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const beadSize = 18 * canvasZoom;
+    const padding = showLabels ? 45 : 15;
+    
+    const x = Math.floor((e.clientX - rect.left - padding) / beadSize);
+    const y = Math.floor((e.clientY - rect.top - padding) / beadSize);
+    
+    if (x < 0 || y < 0 || x >= processedResult.width || y >= processedResult.height) return;
+    
+    const newResult = { ...processedResult };
+    newResult.beads = processedResult.beads.map(row => [...row]);
+    newResult.colorStats = new Map(processedResult.colorStats);
+    
+    if (editMode === 'brush' && selectedPaintColor) {
+      // 画笔模式
+      const oldColor = newResult.beads[y][x].color;
+      if (newResult.colorStats.has(oldColor.id)) {
+        const stat = newResult.colorStats.get(oldColor.id)!;
+        stat.count--;
+        if (stat.count === 0) {
+          newResult.colorStats.delete(oldColor.id);
+        }
+      }
+      
+      newResult.beads[y][x] = { color: selectedPaintColor, originalRgb: selectedPaintColor.rgb };
+      
+      if (newResult.colorStats.has(selectedPaintColor.id)) {
+        newResult.colorStats.get(selectedPaintColor.id)!.count++;
+      } else {
+        newResult.colorStats.set(selectedPaintColor.id, { color: selectedPaintColor, count: 1 });
+      }
+    } else if (editMode === 'eraser') {
+      // 橡皮擦模式 - 替换为奶白色
+      const whiteColor = ALL_COLORS.find(c => c.name === '奶白色') || ALL_COLORS[0];
+      const oldColor = newResult.beads[y][x].color;
+      
+      if (oldColor.id !== whiteColor.id) {
+        if (newResult.colorStats.has(oldColor.id)) {
+          const stat = newResult.colorStats.get(oldColor.id)!;
+          stat.count--;
+          if (stat.count === 0) {
+            newResult.colorStats.delete(oldColor.id);
+          }
+        }
+        
+        newResult.beads[y][x] = { color: whiteColor, originalRgb: whiteColor.rgb };
+        
+        if (newResult.colorStats.has(whiteColor.id)) {
+          newResult.colorStats.get(whiteColor.id)!.count++;
+        } else {
+          newResult.colorStats.set(whiteColor.id, { color: whiteColor, count: 1 });
+        }
+      }
+    } else if (editMode === 'replace' && selectedPaintColor) {
+      // 批量替换模式 - 单格替换
+      const oldColor = newResult.beads[y][x].color;
+      if (newResult.colorStats.has(oldColor.id)) {
+        const stat = newResult.colorStats.get(oldColor.id)!;
+        stat.count--;
+        if (stat.count === 0) {
+          newResult.colorStats.delete(oldColor.id);
+        }
+      }
+      
+      newResult.beads[y][x] = { color: selectedPaintColor, originalRgb: selectedPaintColor.rgb };
+      
+      if (newResult.colorStats.has(selectedPaintColor.id)) {
+        newResult.colorStats.get(selectedPaintColor.id)!.count++;
+      } else {
+        newResult.colorStats.set(selectedPaintColor.id, { color: selectedPaintColor, count: 1 });
+      }
+    }
+    
+    setProcessedResult(newResult);
+  };
+
+  // 材料清单颜色替换
+  const handleColorReplace = (fromColor: BeadColor) => {
+    setReplaceFromColor(fromColor);
+    setShowReplaceDialog(true);
+  };
+
+  const executeColorReplace = (toColor: BeadColor) => {
+    if (!processedResult || !replaceFromColor) return;
+    
+    const newResult = { ...processedResult };
+    newResult.beads = processedResult.beads.map(row => 
+      row.map(bead => {
+        if (bead.color.id === replaceFromColor.id) {
+          return { color: toColor, originalRgb: toColor.rgb };
+        }
+        return bead;
+      })
+    );
+    
+    // 重新统计
+    const newColorStats = new Map<string, { color: BeadColor; count: number }>();
+    newResult.beads.forEach(row => {
+      row.forEach(bead => {
+        const key = bead.color.id;
+        if (newColorStats.has(key)) {
+          newColorStats.get(key)!.count++;
+        } else {
+          newColorStats.set(key, { color: bead.color, count: 1 });
+        }
+      });
+    });
+    newResult.colorStats = newColorStats;
+    
+    setProcessedResult(newResult);
+    setShowReplaceDialog(false);
+    setReplaceFromColor(null);
+  };
+
+  // 导出
   const handleExport = () => {
     if (!processedResult) return;
     downloadPattern(
       processedResult.beads,
       `水雾魔珠图纸-${Date.now()}.png`,
-      24, // 导出时使用较大的珠子尺寸
+      24,
       showGrid,
       showLabels,
       processedResult.colorStats
     );
   };
 
-  // 复制配色清单
+  // 复制清单
   const handleCopyColors = () => {
     if (!processedResult) return;
     const text = copyColorList(processedResult.colorStats);
@@ -248,449 +535,483 @@ export default function BeadGenerator() {
     setProcessedResult(null);
     setGridSize(20);
     setMaxImageSize(300);
-    setBeadSize(18);
-    setColorCategories(['normal']);
+    setSelectedColorIds(new Set(NORMAL_COLORS.map(c => c.id)));
+    setEditMode('none');
+    setSelectedPaintColor(null);
+    setCanvasZoom(1);
   };
-
-  // 切换颜色类别
-  const toggleColorCategory = (category: ColorCategory) => {
-    setColorCategories(prev => {
-      if (prev.includes(category)) {
-        // 至少保留一个类别
-        if (prev.length === 1) return prev;
-        return prev.filter(c => c !== category);
-      } else {
-        return [...prev, category];
-      }
-    });
-  };
-
-  // 颜色类别变化时自动重新处理
-  useEffect(() => {
-    if (originalImage && processedResult) {
-      reprocessImage();
-    }
-  }, [colorCategories]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
-      <div className="container mx-auto px-4 py-8 max-w-7xl">
-        {/* 标题 */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-            水雾魔珠生成器
-          </h1>
-          <p className="text-gray-600">
-            上传图片，自动生成魔珠图纸，享受DIY乐趣
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 左侧：上传区和设置 */}
-          <div className="lg:col-span-4 space-y-4">
-            {/* 图片上传区 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5" />
-                  上传图片
-                </CardTitle>
-                <CardDescription>
-                  支持拖拽上传或点击选择图片
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-all cursor-pointer
-                    ${isDragging 
-                      ? 'border-purple-500 bg-purple-50' 
-                      : 'border-gray-300 hover:border-purple-400 hover:bg-gray-50'
-                    }`}
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileSelect}
-                  />
-                  
-                  {originalImage ? (
-                    <div className="space-y-3">
-                      <img 
-                        src={originalImage} 
-                        alt="原图" 
-                        className="max-h-40 mx-auto rounded shadow"
-                      />
-                      <p className="text-sm text-gray-500">点击更换图片</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="w-16 h-16 mx-auto bg-purple-100 rounded-full flex items-center justify-center">
-                        <Upload className="w-8 h-8 text-purple-500" />
-                      </div>
-                      <div>
-                        <p className="text-gray-600">拖拽图片到这里</p>
-                        <p className="text-sm text-gray-400">或点击选择文件</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 参数设置 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="w-5 h-5" />
-                  参数设置
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* 珠子颜色类别 */}
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Palette className="w-4 h-4 text-purple-500" />
-                    <Label>珠子类型</Label>
-                  </div>
-                  <div className="space-y-3">
-                    {/* 普通款 */}
-                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow">
-                      <Checkbox
-                        id="normal"
-                        checked={colorCategories.includes('normal')}
-                        onCheckedChange={() => toggleColorCategory('normal')}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1">
-                        <Label htmlFor="normal" className="font-medium cursor-pointer">
-                          普通款（24色糖果珠）
-                        </Label>
-                        <p className="text-xs text-gray-500 mt-1">默认推荐，颜色丰富</p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {NORMAL_COLORS.slice(0, 12).map(c => (
-                            <div key={c.id} className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} title={c.name} />
-                          ))}
-                          <span className="text-xs text-gray-400">+12色</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* 夜光款 */}
-                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow">
-                      <Checkbox
-                        id="glow"
-                        checked={colorCategories.includes('glow')}
-                        onCheckedChange={() => toggleColorCategory('glow')}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1">
-                        <Label htmlFor="glow" className="font-medium cursor-pointer">
-                          夜光款（12色）
-                        </Label>
-                        <p className="text-xs text-gray-500 mt-1">黑暗中会发光</p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {GLOW_COLORS.map(c => (
-                            <div key={c.id} className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} title={c.name} />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* 水晶珠 */}
-                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow">
-                      <Checkbox
-                        id="crystal"
-                        checked={colorCategories.includes('crystal')}
-                        onCheckedChange={() => toggleColorCategory('crystal')}
-                        className="mt-0.5"
-                      />
-                      <div className="flex-1">
-                        <Label htmlFor="crystal" className="font-medium cursor-pointer">
-                          水晶珠（12色）
-                        </Label>
-                        <p className="text-xs text-gray-500 mt-1">半透明质感</p>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {CRYSTAL_COLORS.map(c => (
-                            <div key={c.id} className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} title={c.name} />
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    已选择 {colorCategories.length} 种类型，共 {
-                      (colorCategories.includes('normal') ? 24 : 0) +
-                      (colorCategories.includes('glow') ? 12 : 0) +
-                      (colorCategories.includes('crystal') ? 12 : 0)
-                    } 种颜色
-                  </p>
-                </div>
-
-                <Separator />
-
-                {/* 网格大小 */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="gridSize">图纸尺寸</Label>
-                    <Badge variant="secondary">{gridSize} × {gridSize}</Badge>
-                  </div>
-                  <Slider
-                    id="gridSize"
-                    min={10}
-                    max={50}
-                    step={2}
-                    value={[gridSize]}
-                    onValueChange={([value]) => setGridSize(value)}
-                    onValueCommit={() => reprocessImage()}
-                  />
-                  <p className="text-xs text-gray-500">建议15-25格，适合制作小挂饰</p>
-                </div>
-
-                {/* 图片大小限制 */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="maxImageSize">图片大小限制</Label>
-                    <Badge variant="secondary">{maxImageSize}px</Badge>
-                  </div>
-                  <Slider
-                    id="maxImageSize"
-                    min={200}
-                    max={800}
-                    step={50}
-                    value={[maxImageSize]}
-                    onValueChange={([value]) => setMaxImageSize(value)}
-                    onValueCommit={() => originalImage && handleFileUpload(fileInputRef.current?.files?.[0] as File)}
-                  />
-                </div>
-
-                <Separator />
-
-                {/* 显示选项 */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="showGrid" className="flex items-center gap-2">
-                      {showGrid ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      显示点阵网格
-                    </Label>
-                    <Switch
-                      id="showGrid"
-                      checked={showGrid}
-                      onCheckedChange={setShowGrid}
-                    />
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="showLabels" className="flex items-center gap-2">
-                      {showLabels ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      显示行列标签
-                    </Label>
-                    <Switch
-                      id="showLabels"
-                      checked={showLabels}
-                      onCheckedChange={setShowLabels}
-                    />
-                  </div>
-                </div>
-
-                <Separator />
-
-                {/* 珠子显示大小 */}
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center">
-                    <Label>预览大小</Label>
-                    <Badge variant="secondary">{beadSize}px</Badge>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <ZoomOut className="w-4 h-4 text-gray-400" />
-                    <Slider
-                      min={8}
-                      max={40}
-                      step={2}
-                      value={[beadSize]}
-                      onValueChange={([value]) => setBeadSize(value)}
-                      className="flex-1"
-                    />
-                    <ZoomIn className="w-4 h-4 text-gray-400" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 操作按钮 */}
-            {processedResult && (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="grid grid-cols-2 gap-3">
-                    <Button onClick={handleExport} className="w-full">
-                      <Download className="w-4 h-4 mr-2" />
-                      导出图纸
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={handleCopyColors}
-                      className="w-full"
-                    >
-                      <Copy className="w-4 h-4 mr-2" />
-                      复制清单
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      onClick={reprocessImage}
-                      className="w-full"
-                      disabled={isProcessing}
-                    >
-                      重新生成
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      onClick={handleReset}
-                      className="w-full"
-                    >
-                      <RotateCcw className="w-4 h-4 mr-2" />
-                      重置
-                    </Button>
-                  </div>
-                  
-                  {copiedText && (
-                    <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <p className="text-sm text-green-700">配色清单已复制到剪贴板！</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+    <TooltipProvider>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">
+        <div className="container mx-auto px-4 py-6 max-w-7xl">
+          {/* 标题 */}
+          <div className="text-center mb-6">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              水雾魔珠生成器
+            </h1>
+            <p className="text-gray-600">上传图片，自动生成魔珠图纸，支持编辑修改</p>
           </div>
 
-          {/* 右侧：图纸预览和统计 */}
-          <div className="lg:col-span-8 space-y-4">
-            {/* 图纸预览 */}
-            <Card className="min-h-[500px]">
-              <CardHeader>
-                <CardTitle>图纸预览</CardTitle>
-                <CardDescription>
-                  {processedResult 
-                    ? `尺寸: ${processedResult.width} × ${processedResult.height} 格`
-                    : '上传图片后显示图纸'
-                  }
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {isProcessing ? (
-                  <div className="flex items-center justify-center h-[400px]">
-                    <div className="text-center space-y-3">
-                      <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                      <p className="text-gray-500">正在生成图纸...</p>
-                    </div>
-                  </div>
-                ) : processedResult ? (
-                  <ScrollArea className="h-[500px] rounded border bg-white">
-                    <div className="p-4 inline-block min-w-full">
-                      <canvas ref={canvasRef} className="shadow-lg" />
-                    </div>
-                  </ScrollArea>
-                ) : (
-                  <div className="flex items-center justify-center h-[400px] text-gray-400">
-                    <div className="text-center space-y-3">
-                      <div className="w-20 h-20 mx-auto bg-gray-100 rounded-full flex items-center justify-center">
-                        <Upload className="w-10 h-10 text-gray-300" />
-                      </div>
-                      <p>请先上传图片</p>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* 颜色统计 */}
-            {processedResult && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* 左侧面板 */}
+            <div className="lg:col-span-4 space-y-3">
+              {/* 图片上传区 */}
               <Card>
-                <CardHeader>
-                  <CardTitle>颜色统计</CardTitle>
-                  <CardDescription>
-                    共需 {Array.from(processedResult.colorStats.values()).reduce((sum, s) => sum + s.count, 0)} 颗珠子，
-                    使用 {processedResult.colorStats.size} 种颜色
-                  </CardDescription>
+                <CardHeader className="py-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Upload className="w-4 h-4" />
+                    上传图片
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                    {Array.from(processedResult.colorStats.values())
-                      .sort((a, b) => b.count - a.count)
-                      .map((stat) => (
-                        <div 
-                          key={stat.color.id}
-                          className="flex items-center gap-2 p-2 rounded-lg border bg-white hover:shadow-md transition-shadow"
-                        >
-                          <div 
-                            className="w-8 h-8 rounded-full border shadow-sm"
-                            style={{ backgroundColor: stat.color.hex }}
-                            title={stat.color.name}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate">{stat.color.name}</p>
-                            <p className="text-xs text-gray-500">{stat.count} 颗</p>
-                          </div>
-                        </div>
-                      ))}
+                  <div
+                    className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
+                      ${isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect} />
+                    {originalImage ? (
+                      <img src={originalImage} alt="原图" className="max-h-32 mx-auto rounded shadow" />
+                    ) : (
+                      <div className="text-gray-400">
+                        <Upload className="w-8 h-8 mx-auto mb-2" />
+                        <p className="text-sm">拖拽或点击上传</p>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
-            )}
 
-            {/* 使用说明 */}
-            {!processedResult && (
+              {/* 颜色选择 */}
               <Card>
-                <CardHeader>
-                  <CardTitle>使用说明</CardTitle>
+                <CardHeader className="py-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    珠子颜色
+                    <Badge variant="secondary" className="ml-auto">{selectedColorIds.size}色</Badge>
+                  </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold shrink-0">
-                        1
+                <CardContent className="space-y-2">
+                  {/* 普通款 */}
+                  <div className="border rounded-lg">
+                    <div 
+                      className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50"
+                      onClick={() => toggleCategoryExpand('normal')}
+                    >
+                      <div className="flex items-center gap-2">
+                        {expandedCategories.has('normal') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <span className="font-medium text-sm">普通款（24色）</span>
                       </div>
-                      <div>
-                        <p className="font-medium">上传图片</p>
-                        <p className="text-sm text-gray-500">支持 JPG、PNG 等常见格式</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold shrink-0">
-                        2
-                      </div>
-                      <div>
-                        <p className="font-medium">调整参数</p>
-                        <p className="text-sm text-gray-500">设置合适的图纸尺寸</p>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold shrink-0">
-                        3
-                      </div>
-                      <div>
-                        <p className="font-medium">导出图纸</p>
-                        <p className="text-sm text-gray-500">下载图片或复制配色清单</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-1">
+                          {NORMAL_COLORS.slice(0, 6).map(c => (
+                            <div key={c.id} className="w-4 h-4 rounded-full border-2 border-white" style={{ backgroundColor: c.hex }} />
+                          ))}
+                          <div className="w-4 h-4 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center text-[8px]">+18</div>
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={NORMAL_COLORS.every(c => selectedColorIds.has(c.id))}
+                          onChange={(e) => { e.stopPropagation(); toggleCategorySelection('normal'); }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4"
+                        />
                       </div>
                     </div>
+                    {expandedCategories.has('normal') && (
+                      <div className="grid grid-cols-6 gap-1 p-2 pt-0 border-t">
+                        {NORMAL_COLORS.map(c => (
+                          <Tooltip key={c.id}>
+                            <TooltipTrigger>
+                              <div 
+                                className={`w-full aspect-square rounded cursor-pointer relative ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500' : 'opacity-50'}`}
+                                style={{ backgroundColor: c.hex }}
+                                onClick={() => toggleColorSelection(c.id)}
+                              >
+                                {selectedColorIds.has(c.id) && (
+                                  <Check className="absolute inset-0 m-auto w-3 h-3 text-white drop-shadow" />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p>{c.name}</p>
+                              <p className="text-xs text-gray-400">{c.hex}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 夜光款 */}
+                  <div className="border rounded-lg">
+                    <div 
+                      className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50"
+                      onClick={() => toggleCategoryExpand('glow')}
+                    >
+                      <div className="flex items-center gap-2">
+                        {expandedCategories.has('glow') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <span className="font-medium text-sm">夜光款（12色）</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-1">
+                          {GLOW_COLORS.slice(0, 4).map(c => (
+                            <div key={c.id} className="w-4 h-4 rounded-full border-2 border-white" style={{ backgroundColor: c.hex }} />
+                          ))}
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={GLOW_COLORS.every(c => selectedColorIds.has(c.id))}
+                          onChange={(e) => { e.stopPropagation(); toggleCategorySelection('glow'); }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                    </div>
+                    {expandedCategories.has('glow') && (
+                      <div className="grid grid-cols-6 gap-1 p-2 pt-0 border-t">
+                        {GLOW_COLORS.map(c => (
+                          <Tooltip key={c.id}>
+                            <TooltipTrigger>
+                              <div 
+                                className={`w-full aspect-square rounded cursor-pointer relative ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500' : 'opacity-50'}`}
+                                style={{ backgroundColor: c.hex }}
+                                onClick={() => toggleColorSelection(c.id)}
+                              >
+                                {selectedColorIds.has(c.id) && (
+                                  <Check className="absolute inset-0 m-auto w-3 h-3 text-white drop-shadow" />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p>{c.name}</p>
+                              <p className="text-xs text-gray-400">{c.hex}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 水晶珠 */}
+                  <div className="border rounded-lg">
+                    <div 
+                      className="flex items-center justify-between p-2 cursor-pointer hover:bg-gray-50"
+                      onClick={() => toggleCategoryExpand('crystal')}
+                    >
+                      <div className="flex items-center gap-2">
+                        {expandedCategories.has('crystal') ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                        <span className="font-medium text-sm">水晶珠（12色）</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex -space-x-1">
+                          {CRYSTAL_COLORS.slice(0, 4).map(c => (
+                            <div key={c.id} className="w-4 h-4 rounded-full border-2 border-white" style={{ backgroundColor: c.hex }} />
+                          ))}
+                        </div>
+                        <input 
+                          type="checkbox" 
+                          checked={CRYSTAL_COLORS.every(c => selectedColorIds.has(c.id))}
+                          onChange={(e) => { e.stopPropagation(); toggleCategorySelection('crystal'); }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                    </div>
+                    {expandedCategories.has('crystal') && (
+                      <div className="grid grid-cols-6 gap-1 p-2 pt-0 border-t">
+                        {CRYSTAL_COLORS.map(c => (
+                          <Tooltip key={c.id}>
+                            <TooltipTrigger>
+                              <div 
+                                className={`w-full aspect-square rounded cursor-pointer relative ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500' : 'opacity-50'}`}
+                                style={{ backgroundColor: c.hex }}
+                                onClick={() => toggleColorSelection(c.id)}
+                              >
+                                {selectedColorIds.has(c.id) && (
+                                  <Check className="absolute inset-0 m-auto w-3 h-3 text-white drop-shadow" />
+                                )}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top">
+                              <p>{c.name}</p>
+                              <p className="text-xs text-gray-400">{c.hex}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* 参数设置 */}
+              <Card>
+                <CardHeader className="py-3">
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Settings className="w-4 h-4" />
+                    参数设置
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm">图纸尺寸</Label>
+                      <Badge variant="secondary">{gridSize} × {gridSize}</Badge>
+                    </div>
+                    <Slider
+                      min={10} max={200} step={5}
+                      value={[gridSize]}
+                      onValueChange={([value]) => setGridSize(value)}
+                      onValueCommit={() => reprocessImage()}
+                    />
+                    <p className="text-xs text-gray-500">最大支持200×200</p>
                   </div>
                   
-                  <div className="mt-4 p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
-                    <p className="text-sm text-cyan-800">
-                      <strong>提示：</strong>水雾魔珠通过在模板板上排列珠子，然后<strong>喷水粘合</strong>制作完成。
-                      建议选择简单清晰的图片，尺寸控制在15-25格左右，适合制作钥匙扣、小挂饰等。
-                    </p>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm">图片大小限制</Label>
+                      <Badge variant="secondary">{maxImageSize}px</Badge>
+                    </div>
+                    <Slider
+                      min={200} max={1000} step={50}
+                      value={[maxImageSize]}
+                      onValueChange={([value]) => setMaxImageSize(value)}
+                      onValueCommit={() => originalImage && handleFileUpload(fileInputRef.current?.files?.[0] as File)}
+                    />
                   </div>
                 </CardContent>
               </Card>
-            )}
+
+              {/* 操作按钮 */}
+              {processedResult && (
+                <Card>
+                  <CardContent className="pt-4 grid grid-cols-2 gap-2">
+                    <Button onClick={handleExport} size="sm"><Download className="w-4 h-4 mr-1" />导出</Button>
+                    <Button variant="outline" onClick={handleCopyColors} size="sm"><Copy className="w-4 h-4 mr-1" />复制清单</Button>
+                    <Button variant="outline" onClick={reprocessImage} size="sm" disabled={isProcessing}>重新生成</Button>
+                    <Button variant="ghost" onClick={handleReset} size="sm"><RotateCcw className="w-4 h-4 mr-1" />重置</Button>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* 右侧：图纸区域 */}
+            <div className="lg:col-span-8 space-y-3">
+              {/* 编辑工具栏 */}
+              {processedResult && (
+                <Card>
+                  <CardContent className="py-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1 border-r pr-2">
+                        <Button
+                          variant={editMode === 'none' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEditMode('none')}
+                        >
+                          <MousePointer className="w-4 h-4 mr-1" />查看
+                        </Button>
+                      </div>
+                      
+                      <div className="flex items-center gap-1 border-r pr-2">
+                        <Button
+                          variant={editMode === 'brush' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => { setEditMode('brush'); setSelectedPaintColor(selectedPaintColor || ALL_COLORS[0]); }}
+                        >
+                          <Paintbrush className="w-4 h-4 mr-1" />画笔
+                        </Button>
+                        <Button
+                          variant={editMode === 'eraser' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setEditMode('eraser')}
+                        >
+                          <Eraser className="w-4 h-4 mr-1" />橡皮
+                        </Button>
+                        <Button
+                          variant={editMode === 'replace' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => { setEditMode('replace'); setSelectedPaintColor(selectedPaintColor || ALL_COLORS[0]); }}
+                        >
+                          <Replace className="w-4 h-4 mr-1" />替换
+                        </Button>
+                      </div>
+                      
+                      {(editMode === 'brush' || editMode === 'replace') && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-500">颜色:</span>
+                          <div className="flex gap-1">
+                            {ALL_COLORS.slice(0, 12).map(c => (
+                              <div
+                                key={c.id}
+                                className={`w-6 h-6 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500' : ''}`}
+                                style={{ backgroundColor: c.hex }}
+                                onClick={() => setSelectedPaintColor(c)}
+                              />
+                            ))}
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-xs">
+                                  +{ALL_COLORS.length - 12}
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="grid grid-cols-6 gap-1 p-2">
+                                  {ALL_COLORS.map(c => (
+                                    <div
+                                      key={c.id}
+                                      className={`w-6 h-6 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500' : ''}`}
+                                      style={{ backgroundColor: c.hex }}
+                                      onClick={() => setSelectedPaintColor(c)}
+                                      title={c.name}
+                                    />
+                                  ))}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center gap-1 ml-auto">
+                        <Button variant="outline" size="sm" onClick={() => setCanvasZoom(z => Math.max(0.5, z - 0.25))}>
+                          <ZoomOut className="w-4 h-4" />
+                        </Button>
+                        <Badge variant="outline">{Math.round(canvasZoom * 100)}%</Badge>
+                        <Button variant="outline" size="sm" onClick={() => setCanvasZoom(z => Math.min(3, z + 0.25))}>
+                          <ZoomIn className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* 图纸预览 */}
+              <Card className="min-h-[400px]">
+                <CardContent className="p-4">
+                  {isProcessing ? (
+                    <div className="flex items-center justify-center h-[350px]">
+                      <div className="text-center">
+                        <div className="w-10 h-10 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+                        <p className="text-gray-500">处理中...</p>
+                      </div>
+                    </div>
+                  ) : processedResult ? (
+                    <ScrollArea className="h-[500px]" ref={containerRef}>
+                      <div className="inline-block min-w-full">
+                        <canvas 
+                          ref={canvasRef} 
+                          className="shadow-lg cursor-crosshair"
+                          onMouseDown={handleCanvasMouseDown}
+                          onMouseMove={handleCanvasMouseMove}
+                        />
+                      </div>
+                    </ScrollArea>
+                  ) : (
+                    <div className="flex items-center justify-center h-[350px] text-gray-400">
+                      <div className="text-center">
+                        <Upload className="w-12 h-12 mx-auto mb-2" />
+                        <p>请上传图片</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* 颜色统计 */}
+              {processedResult && (
+                <Card>
+                  <CardHeader className="py-2">
+                    <CardTitle className="text-sm">材料清单（点击可批量替换颜色）</CardTitle>
+                    <CardDescription className="text-xs">
+                      共 {Array.from(processedResult.colorStats.values()).reduce((sum, s) => sum + s.count, 0)} 颗，
+                      {processedResult.colorStats.size} 种颜色
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(processedResult.colorStats.values())
+                        .sort((a, b) => b.count - a.count)
+                        .map((stat) => (
+                          <Tooltip key={stat.color.id}>
+                            <TooltipTrigger>
+                              <div 
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-full border bg-white hover:shadow cursor-pointer"
+                                onClick={() => handleColorReplace(stat.color)}
+                              >
+                                <div 
+                                  className="w-5 h-5 rounded-full border"
+                                  style={{ backgroundColor: stat.color.hex }}
+                                />
+                                <span className="text-xs">{stat.count}</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{stat.color.name}</p>
+                              <p className="text-xs text-gray-400">点击批量替换</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* 颜色替换对话框 */}
+        {showReplaceDialog && replaceFromColor && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-[400px] max-h-[80vh]">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-base">替换颜色</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setShowReplaceDialog(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-gray-500 mb-3">
+                  将 <span className="inline-flex items-center gap-1">
+                    <span className="w-4 h-4 rounded-full" style={{ backgroundColor: replaceFromColor.hex }} />
+                    {replaceFromColor.name}
+                  </span> 替换为：
+                </p>
+                <div className="grid grid-cols-8 gap-1 max-h-[300px] overflow-y-auto">
+                  {ALL_COLORS.map(c => (
+                    <Tooltip key={c.id}>
+                      <TooltipTrigger>
+                        <div
+                          className={`w-full aspect-square rounded cursor-pointer hover:ring-2 hover:ring-purple-500`}
+                          style={{ backgroundColor: c.hex }}
+                          onClick={() => executeColorReplace(c)}
+                        />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{c.name}</p>
+                        <p className="text-xs text-gray-400">{c.hex}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
-    </div>
+    </TooltipProvider>
+  );
+}
+
+// 添加缺失的 ChevronRight 图标
+function ChevronRight({ className }: { className?: string }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <path d="m9 18 6-6-6-6"/>
+    </svg>
   );
 }
