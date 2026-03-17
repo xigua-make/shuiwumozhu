@@ -156,9 +156,9 @@ export function loadImageToCanvas(file: File): Promise<HTMLCanvasElement> {
   });
 }
 
-// 六角板预设（每行珠子数）
-const HEXAGON_PATTERN = [6, 8, 10, 12, 14, 16, 16, 14, 12, 10, 8, 6];
-const HEXAGON_MAX_WIDTH = 16;
+// 六角板预设（每行珠子数）- 18行
+const HEXAGON_PATTERN = [9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 16, 15, 14, 13, 12, 11, 10, 9];
+const HEXAGON_MAX_WIDTH = 17;
 
 // 导出图纸为图片（水雾魔珠样式：圆形珠子 + 点阵网格 + 用料统计）
 export function exportBeadPattern(
@@ -167,10 +167,10 @@ export function exportBeadPattern(
   showGrid: boolean = true,
   showLabels: boolean = true,
   colorStats?: Map<string, { color: BeadColor; count: number }>,
-  canvasType: 'rect' | 'hexagon' = 'rect'
+  canvasType: 'rect' | 'hexagon' | 'diagonal' = 'rect'
 ): HTMLCanvasElement {
   const height = beads.length;
-  const width = canvasType === 'hexagon' ? HEXAGON_MAX_WIDTH : (beads[0]?.length || 0);
+  let width = beads[0]?.length || 0;
   
   if (height === 0) {
     throw new Error('图纸数据无效');
@@ -184,8 +184,16 @@ export function exportBeadPattern(
   const statsHeight = colorStats ? 140 * scale : 0;
   const padding = showLabels ? 60 * scale : 20 * scale;
   
+  // 计算画布宽度
+  let canvasWidth = width;
+  if (canvasType === 'hexagon') {
+    canvasWidth = HEXAGON_MAX_WIDTH;
+  } else if (canvasType === 'diagonal') {
+    canvasWidth = width + 0.5; // 斜板需要额外半个珠子的宽度
+  }
+  
   const canvas = document.createElement('canvas');
-  canvas.width = width * actualBeadSize + padding * 2;
+  canvas.width = canvasWidth * actualBeadSize + padding * 2;
   canvas.height = height * actualBeadSize + padding * 2 + statsHeight;
   
   const ctx = canvas.getContext('2d')!;
@@ -198,8 +206,18 @@ export function exportBeadPattern(
   if (showGrid) {
     ctx.fillStyle = '#E5E5E5';
     for (let y = 0; y <= height; y++) {
-      const rowWidth = canvasType === 'hexagon' ? (HEXAGON_PATTERN[y] || 0) : beads[0]?.length || 0;
-      const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+      let rowWidth, offsetX;
+      
+      if (canvasType === 'hexagon') {
+        rowWidth = HEXAGON_PATTERN[y] || 0;
+        offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
+      } else if (canvasType === 'diagonal') {
+        rowWidth = width;
+        offsetX = (y % 2 === 1) ? 0.5 : 0;
+      } else {
+        rowWidth = width;
+        offsetX = 0;
+      }
       
       for (let x = 0; x <= rowWidth; x++) {
         const px = padding + (offsetX + x) * actualBeadSize;
@@ -227,10 +245,9 @@ export function exportBeadPattern(
         }
       }
     } else {
-      // 矩形标签
-      const rectWidth = beads[0]?.length || 0;
-      for (let x = 0; x < rectWidth; x++) {
-        if (x % 5 === 0 || x === rectWidth - 1) {
+      // 矩形和斜板标签
+      for (let x = 0; x < width; x++) {
+        if (x % 5 === 0 || x === width - 1) {
           ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 22 * scale);
         }
       }
@@ -247,7 +264,15 @@ export function exportBeadPattern(
   for (let y = 0; y < height; y++) {
     const row = beads[y];
     const rowWidth = row.length;
-    const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+    let offsetX;
+    
+    if (canvasType === 'hexagon') {
+      offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
+    } else if (canvasType === 'diagonal') {
+      offsetX = (y % 2 === 1) ? 0.5 : 0;
+    } else {
+      offsetX = 0;
+    }
     
     for (let x = 0; x < rowWidth; x++) {
       const bead = row[x];
@@ -346,7 +371,7 @@ export function downloadPattern(
   showGrid: boolean = true,
   showLabels: boolean = true,
   colorStats?: Map<string, { color: BeadColor; count: number }>,
-  canvasType: 'rect' | 'hexagon' = 'rect'
+  canvasType: 'rect' | 'hexagon' | 'diagonal' = 'rect'
 ): void {
   const canvas = exportBeadPattern(beads, beadSize, showGrid, showLabels, colorStats, canvasType);
   

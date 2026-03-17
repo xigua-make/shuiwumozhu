@@ -29,12 +29,12 @@ import {
 } from '@/lib/bead-colors';
 
 type EditMode = 'drag' | 'brush' | 'eraser' | 'replace';
-type CanvasType = 'rect' | 'hexagon';
+type CanvasType = 'rect' | 'hexagon' | 'diagonal';
 
-// 六角板预设（每行珠子数）
-const HEXAGON_PATTERN = [6, 8, 10, 12, 14, 16, 16, 14, 12, 10, 8, 6];
-const HEXAGON_MAX_WIDTH = 16;
-const HEXAGON_HEIGHT = 12;
+// 六角板预设（每行珠子数）- 18行
+const HEXAGON_PATTERN = [9, 10, 11, 12, 13, 14, 15, 16, 17, 17, 16, 15, 14, 13, 12, 11, 10, 9];
+const HEXAGON_MAX_WIDTH = 17;
+const HEXAGON_HEIGHT = 18;
 
 export default function BeadGenerator() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -290,6 +290,30 @@ export default function BeadGenerator() {
       });
       setGridWidth(HEXAGON_MAX_WIDTH);
       setGridHeight(HEXAGON_HEIGHT);
+    } else if (type === 'diagonal') {
+      // 斜板 - 21x21交错排列（每行偏移半个珠子）
+      const beads: ProcessedBead[][] = [];
+      for (let y = 0; y < height; y++) {
+        const row: ProcessedBead[] = [];
+        for (let x = 0; x < width; x++) {
+          row.push({
+            color: defaultColor,
+            originalRgb: [255, 255, 255]
+          });
+        }
+        beads.push(row);
+      }
+      
+      colorStats.set(defaultColor.id, { color: defaultColor, count: width * height });
+      
+      setProcessedResult({
+        beads,
+        width,
+        height,
+        colorStats
+      });
+      setGridWidth(width);
+      setGridHeight(height);
     } else {
       // 矩形画布
       const beads: ProcessedBead[][] = [];
@@ -323,16 +347,19 @@ export default function BeadGenerator() {
   }, []);
 
   // 应用预设
-  const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square') => {
+  const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
     switch (preset) {
       case 'hexagon':
         createBlankCanvas(HEXAGON_MAX_WIDTH, HEXAGON_HEIGHT, 'hexagon');
         break;
       case 'small-square':
-        createBlankCanvas(15, 15, 'rect');
+        createBlankCanvas(16, 16, 'rect');
         break;
       case 'large-square':
         createBlankCanvas(21, 21, 'rect');
+        break;
+      case 'diagonal':
+        createBlankCanvas(21, 21, 'diagonal');
         break;
     }
   }, [createBlankCanvas]);
@@ -400,8 +427,15 @@ export default function BeadGenerator() {
     
     const padding = showLabels ? 45 : 15;
     
-    // 对于六角板，宽度取最大值
-    const canvasWidth = canvasType === 'hexagon' ? HEXAGON_MAX_WIDTH : width;
+    // 对于六角板和斜板，宽度取最大值
+    let canvasWidth = width;
+    if (canvasType === 'hexagon') {
+      canvasWidth = HEXAGON_MAX_WIDTH;
+    } else if (canvasType === 'diagonal') {
+      // 斜板需要额外半个珠子的宽度
+      canvasWidth = width + 0.5;
+    }
+    
     canvas.width = canvasWidth * beadSize + padding * 2;
     canvas.height = height * beadSize + padding * 2;
     
@@ -415,8 +449,19 @@ export default function BeadGenerator() {
     if (showGrid) {
       ctx.fillStyle = '#E5E5E5';
       for (let y = 0; y <= height; y++) {
-        const rowWidth = canvasType === 'hexagon' ? (HEXAGON_PATTERN[y] || 0) : width;
-        const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+        let rowWidth, offsetX;
+        
+        if (canvasType === 'hexagon') {
+          rowWidth = HEXAGON_PATTERN[y] || 0;
+          offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
+        } else if (canvasType === 'diagonal') {
+          rowWidth = width;
+          // 奇数行偏移半个珠子
+          offsetX = (y % 2 === 1) ? 0.5 : 0;
+        } else {
+          rowWidth = width;
+          offsetX = 0;
+        }
         
         for (let x = 0; x <= rowWidth; x++) {
           const px = padding + (offsetX + x) * beadSize;
@@ -443,7 +488,7 @@ export default function BeadGenerator() {
           }
         }
       } else {
-        // 矩形标签
+        // 矩形和斜板标签
         for (let x = 0; x < width; x++) {
           if (x % 5 === 0 || x === width - 1) {
             ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
@@ -462,7 +507,16 @@ export default function BeadGenerator() {
     for (let y = 0; y < height; y++) {
       const row = beads[y];
       const rowWidth = row.length;
-      const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+      let offsetX;
+      
+      if (canvasType === 'hexagon') {
+        offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
+      } else if (canvasType === 'diagonal') {
+        // 奇数行偏移半个珠子
+        offsetX = (y % 2 === 1) ? 0.5 : 0;
+      } else {
+        offsetX = 0;
+      }
       
       for (let x = 0; x < rowWidth; x++) {
         const bead = row[x];
@@ -559,9 +613,19 @@ export default function BeadGenerator() {
     
     if (y < 0 || y >= processedResult.height) return;
     
-    // 对于六角板，需要考虑行偏移
+    // 根据画布类型计算行偏移
     const rowWidth = processedResult.beads[y].length;
-    const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+    let offsetX;
+    
+    if (canvasType === 'hexagon') {
+      offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
+    } else if (canvasType === 'diagonal') {
+      // 斜板奇数行偏移半个珠子
+      offsetX = (y % 2 === 1) ? 0.5 : 0;
+    } else {
+      offsetX = 0;
+    }
+    
     const x = Math.floor(clickX - offsetX);
     
     if (x < 0 || x >= rowWidth) return;
@@ -918,7 +982,7 @@ export default function BeadGenerator() {
                   {/* 画布尺寸预设 */}
                   <div className="space-y-2">
                     <Label className="text-sm">画布尺寸预设</Label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <Button 
                         variant={canvasType === 'hexagon' ? 'default' : 'outline'} 
                         size="sm"
@@ -927,7 +991,7 @@ export default function BeadGenerator() {
                         六角板
                       </Button>
                       <Button 
-                        variant={canvasType === 'rect' && gridWidth === 15 && gridHeight === 15 ? 'default' : 'outline'} 
+                        variant={canvasType === 'rect' && gridWidth === 16 && gridHeight === 16 ? 'default' : 'outline'} 
                         size="sm"
                         onClick={() => applyPreset('small-square')}
                       >
@@ -939,6 +1003,13 @@ export default function BeadGenerator() {
                         onClick={() => applyPreset('large-square')}
                       >
                         大方板
+                      </Button>
+                      <Button 
+                        variant={canvasType === 'diagonal' ? 'default' : 'outline'} 
+                        size="sm"
+                        onClick={() => applyPreset('diagonal')}
+                      >
+                        斜板
                       </Button>
                     </div>
                   </div>
@@ -976,7 +1047,13 @@ export default function BeadGenerator() {
                   
                   {canvasType === 'hexagon' && (
                     <div className="p-2 bg-purple-50 rounded-lg">
-                      <p className="text-sm text-purple-700">六角板: 132颗珠子（{HEXAGON_HEIGHT}行）</p>
+                      <p className="text-sm text-purple-700">六角板: {HEXAGON_PATTERN.reduce((a, b) => a + b, 0)}颗珠子（{HEXAGON_HEIGHT}行）</p>
+                    </div>
+                  )}
+                  
+                  {canvasType === 'diagonal' && (
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <p className="text-sm text-blue-700">斜板: {gridWidth}×{gridHeight} = {gridWidth * gridHeight}颗珠子（交错排列）</p>
                     </div>
                   )}
                   
