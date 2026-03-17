@@ -563,7 +563,7 @@ export default function BeadGenerator() {
     const { beads, width, height } = processedResult;
     const beadSize = 18 * canvasZoom;
     
-    const padding = showCoordinates ? 55 : 15;
+    const padding = showCoordinates ? 65 : 15;
     
     // 对于六角板和斜板，宽度取最大值
     let canvasWidth = width;
@@ -625,16 +625,16 @@ export default function BeadGenerator() {
       if (canvasType === 'hexagon') {
         // 六角板标签 - 显示行号
         for (let y = 0; y < height; y++) {
-          ctx.fillText((y + 1).toString(), padding - 22 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          ctx.fillText((y + 1).toString(), padding - 25 * canvasZoom, padding + y * beadSize + beadSize / 2);
         }
       } else {
         // 矩形和斜板标签 - 每行每列都显示
         for (let x = 0; x < width; x++) {
-          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 22 * canvasZoom);
+          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 25 * canvasZoom);
         }
         
         for (let y = 0; y < height; y++) {
-          ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          ctx.fillText((y + 1).toString(), padding - 25 * canvasZoom, padding + y * beadSize + beadSize / 2);
         }
       }
     }

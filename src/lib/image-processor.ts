@@ -182,7 +182,7 @@ export function exportBeadPattern(
   
   // 计算统计区域高度
   const statsHeight = colorStats ? 200 * scale : 0;
-  const padding = showLabels ? 70 * scale : 25 * scale;
+  const padding = showLabels ? 80 * scale : 25 * scale;
   
   // 计算画布尺寸
   let canvasWidth = width;
@@ -240,24 +240,18 @@ export function exportBeadPattern(
     ctx.textBaseline = 'middle';
     
     if (canvasType === 'hexagon') {
-      // 六角板只显示行标签
+      // 六角板标签 - 显示行号
       for (let y = 0; y < height; y++) {
-        if (y % 2 === 0 || y === height - 1) {
-          ctx.fillText((y + 1).toString(), padding - 28 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
-        }
+        ctx.fillText((y + 1).toString(), padding - 32 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
       }
     } else {
-      // 矩形和斜板标签
+      // 矩形和斜板标签 - 每行每列都显示
       for (let x = 0; x < width; x++) {
-        if (x % 5 === 0 || x === width - 1) {
-          ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 28 * scale);
-        }
+        ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 32 * scale);
       }
       
       for (let y = 0; y < height; y++) {
-        if (y % 5 === 0 || y === height - 1) {
-          ctx.fillText((y + 1).toString(), padding - 28 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
-        }
+        ctx.fillText((y + 1).toString(), padding - 32 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
       }
     }
   }
