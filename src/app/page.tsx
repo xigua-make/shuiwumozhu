@@ -106,9 +106,40 @@ export default function BeadGenerator() {
         if (color) categories.add(color.category);
       });
       
-      // 使用gridWidth和gridHeight的平均值
-      const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
-      const result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+      // 根据画布类型确定处理尺寸
+      let targetWidth = gridWidth;
+      let targetHeight = gridHeight;
+      
+      if (canvasType === 'hexagon') {
+        targetWidth = HEXAGON_MAX_WIDTH;
+        targetHeight = HEXAGON_HEIGHT;
+      }
+      
+      // 使用目标宽度和高度的平均值
+      const avgGridSize = Math.round((targetWidth + targetHeight) / 2);
+      let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+      
+      // 对于六角板，需要裁剪成六角形
+      if (canvasType === 'hexagon') {
+        const hexBeads: ProcessedBead[][] = [];
+        for (let y = 0; y < HEXAGON_HEIGHT; y++) {
+          const rowWidth = HEXAGON_PATTERN[y];
+          const startOffset = Math.floor((HEXAGON_MAX_WIDTH - rowWidth) / 2);
+          const row: ProcessedBead[] = [];
+          for (let x = 0; x < rowWidth; x++) {
+            if (y < result.beads.length && startOffset + x < result.beads[y].length) {
+              row.push(result.beads[y][startOffset + x]);
+            } else {
+              const defaultColor = ALL_COLORS.find(c => c.name === '奶白色') || ALL_COLORS[0];
+              row.push({ color: defaultColor, originalRgb: [255, 255, 255] });
+            }
+          }
+          hexBeads.push(row);
+        }
+        result.beads = hexBeads;
+        result.width = HEXAGON_MAX_WIDTH;
+        result.height = HEXAGON_HEIGHT;
+      }
       
       // 过滤结果，只使用选中的颜色
       const selectedColors = getSelectedColors();
@@ -146,7 +177,7 @@ export default function BeadGenerator() {
     } finally {
       setIsProcessing(false);
     }
-  }, [gridWidth, gridHeight, maxImageSize, selectedColorIds, getSelectedColors]);
+  }, [gridWidth, gridHeight, maxImageSize, selectedColorIds, getSelectedColors, canvasType]);
 
   // 在选中颜色中找最接近的颜色
   const findClosestColor = (rgb: [number, number, number], colors: BeadColor[]): BeadColor => {
@@ -219,9 +250,39 @@ export default function BeadGenerator() {
           if (color) categories.add(color.category);
         });
         
-        // 使用gridWidth和gridHeight的平均值作为gridSize
-        const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
-        const result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+        // 根据画布类型确定处理尺寸
+        let targetWidth = gridWidth;
+        let targetHeight = gridHeight;
+        
+        if (canvasType === 'hexagon') {
+          targetWidth = HEXAGON_MAX_WIDTH;
+          targetHeight = HEXAGON_HEIGHT;
+        }
+        
+        const avgGridSize = Math.round((targetWidth + targetHeight) / 2);
+        let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+        
+        // 对于六角板，需要裁剪成六角形
+        if (canvasType === 'hexagon') {
+          const hexBeads: ProcessedBead[][] = [];
+          for (let y = 0; y < HEXAGON_HEIGHT; y++) {
+            const rowWidth = HEXAGON_PATTERN[y];
+            const startOffset = Math.floor((HEXAGON_MAX_WIDTH - rowWidth) / 2);
+            const row: ProcessedBead[] = [];
+            for (let x = 0; x < rowWidth; x++) {
+              if (y < result.beads.length && startOffset + x < result.beads[y].length) {
+                row.push(result.beads[y][startOffset + x]);
+              } else {
+                const defaultColor = ALL_COLORS.find(c => c.name === '奶白色') || ALL_COLORS[0];
+                row.push({ color: defaultColor, originalRgb: [255, 255, 255] });
+              }
+            }
+            hexBeads.push(row);
+          }
+          result.beads = hexBeads;
+          result.width = HEXAGON_MAX_WIDTH;
+          result.height = HEXAGON_HEIGHT;
+        }
         
         // 过滤结果
         const selectedColors = getSelectedColors();
@@ -258,7 +319,7 @@ export default function BeadGenerator() {
       console.error('重新处理失败:', error);
       setIsProcessing(false);
     }
-  }, [originalImage, gridWidth, gridHeight, selectedColorIds, getSelectedColors]);
+  }, [originalImage, gridWidth, gridHeight, selectedColorIds, getSelectedColors, canvasType]);
 
   // 创建空白画布
   const createBlankCanvas = useCallback((width: number, height: number, type: CanvasType = 'rect') => {
@@ -348,23 +409,31 @@ export default function BeadGenerator() {
     setCanvasOffset({ x: 0, y: 0 });
   }, []);
 
-  // 应用预设
+  // 应用预设 - 只设置尺寸和类型参数，不创建空白画布
   const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
     switch (preset) {
       case 'hexagon':
-        createBlankCanvas(HEXAGON_MAX_WIDTH, HEXAGON_HEIGHT, 'hexagon');
+        setCanvasType('hexagon');
+        setGridWidth(HEXAGON_MAX_WIDTH);
+        setGridHeight(HEXAGON_HEIGHT);
         break;
       case 'small-square':
-        createBlankCanvas(16, 16, 'rect');
+        setCanvasType('rect');
+        setGridWidth(16);
+        setGridHeight(16);
         break;
       case 'large-square':
-        createBlankCanvas(21, 21, 'rect');
+        setCanvasType('rect');
+        setGridWidth(21);
+        setGridHeight(21);
         break;
       case 'diagonal':
-        createBlankCanvas(21, 21, 'diagonal');
+        setCanvasType('diagonal');
+        setGridWidth(21);
+        setGridHeight(21);
         break;
     }
-  }, [createBlankCanvas]);
+  }, []);
 
   // 颜色类别展开/收起
   const toggleCategoryExpand = (category: ColorCategory) => {
@@ -459,7 +528,7 @@ export default function BeadGenerator() {
         } else if (canvasType === 'diagonal') {
           rowWidth = width;
           // 奇数行偏移半个珠子
-          offsetX = (y % 2 === 1) ? 0.5 : 0;
+          offsetX = (y % 2 === 0) ? 0.5 : 0;
         } else {
           rowWidth = width;
           offsetX = 0;
@@ -512,7 +581,7 @@ export default function BeadGenerator() {
         offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
       } else if (canvasType === 'diagonal') {
         // 奇数行偏移半个珠子
-        offsetX = (y % 2 === 1) ? 0.5 : 0;
+        offsetX = (y % 2 === 0) ? 0.5 : 0;
       } else {
         offsetX = 0;
       }
@@ -626,7 +695,7 @@ export default function BeadGenerator() {
       offsetX = (HEXAGON_MAX_WIDTH - rowWidth) / 2;
     } else if (canvasType === 'diagonal') {
       // 斜板奇数行偏移半个珠子
-      offsetX = (y % 2 === 1) ? 0.5 : 0;
+      offsetX = (y % 2 === 0) ? 0.5 : 0;
     } else {
       offsetX = 0;
     }
@@ -1413,6 +1482,15 @@ export default function BeadGenerator() {
                       value={[blankCanvasWidth]}
                       onValueChange={([value]) => setBlankCanvasWidth(value)}
                     />
+                    <input
+                      type="number"
+                      min={5}
+                      max={100}
+                      value={blankCanvasWidth}
+                      onChange={(e) => setBlankCanvasWidth(Math.min(100, Math.max(5, parseInt(e.target.value) || 5)))}
+                      className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="输入宽度 (5-100)"
+                    />
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -1423,6 +1501,15 @@ export default function BeadGenerator() {
                       min={5} max={100} step={1}
                       value={[blankCanvasHeight]}
                       onValueChange={([value]) => setBlankCanvasHeight(value)}
+                    />
+                    <input
+                      type="number"
+                      min={5}
+                      max={100}
+                      value={blankCanvasHeight}
+                      onChange={(e) => setBlankCanvasHeight(Math.min(100, Math.max(5, parseInt(e.target.value) || 5)))}
+                      className="w-full px-3 py-1.5 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="输入高度 (5-100)"
                     />
                   </div>
                 </div>
