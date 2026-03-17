@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   Upload, Download, Copy, Settings, RotateCcw, ZoomIn, ZoomOut, 
-  Paintbrush, Eraser, MousePointer, Replace, ChevronDown, ChevronUp, X, Check
+  Paintbrush, Eraser, MousePointer, Replace, ChevronDown, ChevronUp, X, Check, Move
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -27,7 +27,7 @@ import {
   ColorCategory, BeadColor, ALL_COLORS, getColorsByCategories 
 } from '@/lib/bead-colors';
 
-type EditMode = 'none' | 'brush' | 'eraser' | 'replace';
+type EditMode = 'drag' | 'brush' | 'eraser' | 'replace';
 
 export default function BeadGenerator() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export default function BeadGenerator() {
   const [maxImageSize, setMaxImageSize] = useState(300);
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
-  const [isDragging, setIsDragging] = useState(false);
+  const [isFileDragging, setIsFileDragging] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
   
   // 颜色选择相关
@@ -45,9 +45,12 @@ export default function BeadGenerator() {
   const [expandedCategories, setExpandedCategories] = useState<Set<ColorCategory>>(new Set(['normal']));
   
   // 编辑相关
-  const [editMode, setEditMode] = useState<EditMode>('none');
+  const [editMode, setEditMode] = useState<EditMode>('drag');
   const [selectedPaintColor, setSelectedPaintColor] = useState<BeadColor | null>(null);
   const [canvasZoom, setCanvasZoom] = useState(1);
+  const [canvasOffset, setCanvasOffset] = useState({ x: 0, y: 0 });
+  const [isCanvasDragging, setIsCanvasDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [showColorPicker, setShowColorPicker] = useState(false);
   
   // 替换颜色功能
@@ -158,17 +161,17 @@ export default function BeadGenerator() {
   // 拖拽处理
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    setIsFileDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsFileDragging(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsFileDragging(false);
     const file = e.dataTransfer.files[0];
     if (file) {
       handleFileUpload(file);
@@ -378,18 +381,44 @@ export default function BeadGenerator() {
     }
   }, [processedResult, canvasZoom, showGrid, showLabels]);
 
-  // Canvas 交互 - 画笔/橡皮擦/替换
+  // Canvas 交互 - 拖拽/画笔/橡皮擦/替换
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!processedResult || editMode === 'none') return;
+    if (!processedResult) return;
+    
+    if (editMode === 'drag') {
+      // 开始拖拽
+      setIsCanvasDragging(true);
+      setDragStart({ x: e.clientX - canvasOffset.x, y: e.clientY - canvasOffset.y });
+      return;
+    }
     
     handleCanvasInteraction(e);
   };
 
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!processedResult || editMode === 'none') return;
+    if (!processedResult) return;
+    
+    if (editMode === 'drag' && isCanvasDragging) {
+      // 拖拽中 - 更新偏移
+      setCanvasOffset({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y
+      });
+      return;
+    }
+    
+    if (editMode === 'drag') return;
     if (e.buttons !== 1) return; // 只在左键按下时处理
     
     handleCanvasInteraction(e);
+  };
+
+  const handleCanvasMouseUp = () => {
+    setIsCanvasDragging(false);
+  };
+
+  const handleCanvasMouseLeave = () => {
+    setIsCanvasDragging(false);
   };
 
   // 鼠标滚轮缩放
@@ -545,9 +574,10 @@ export default function BeadGenerator() {
     setGridSize(20);
     setMaxImageSize(300);
     setSelectedColorIds(new Set(NORMAL_COLORS.map(c => c.id)));
-    setEditMode('none');
+    setEditMode('drag');
     setSelectedPaintColor(null);
     setCanvasZoom(1);
+    setCanvasOffset({ x: 0, y: 0 });
   };
 
   return (
@@ -576,7 +606,7 @@ export default function BeadGenerator() {
                 <CardContent>
                   <div
                     className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-all cursor-pointer
-                      ${isDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}`}
+                      ${isCanvasDragging ? 'border-purple-500 bg-purple-50' : 'border-gray-300 hover:border-purple-400'}`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
@@ -631,18 +661,18 @@ export default function BeadGenerator() {
                       </div>
                     </div>
                     {expandedCategories.has('normal') && (
-                      <div className="grid grid-cols-4 gap-1 p-2 pt-0 border-t">
+                      <div className="grid grid-cols-4 gap-2 p-2 pt-0 border-t">
                         {NORMAL_COLORS.map(c => (
                           <div
                             key={c.id}
-                            className={`flex flex-col items-center p-1 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100'}`}
+                            className={`flex flex-col items-center p-2 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100 hover:bg-gray-50'}`}
                             onClick={() => toggleColorSelection(c.id)}
                           >
                             <div 
-                              className="w-6 h-6 rounded-full border shadow-sm"
+                              className="w-8 h-8 rounded-full border-2 shadow-sm"
                               style={{ backgroundColor: c.hex }}
                             />
-                            <span className="text-[9px] mt-0.5 text-center leading-tight text-gray-600">{c.name.slice(0, 4)}</span>
+                            <span className="text-xs mt-1 text-center leading-tight text-gray-700 font-medium">{c.name.slice(0, 4)}</span>
                           </div>
                         ))}
                       </div>
@@ -675,18 +705,18 @@ export default function BeadGenerator() {
                       </div>
                     </div>
                     {expandedCategories.has('glow') && (
-                      <div className="grid grid-cols-4 gap-1 p-2 pt-0 border-t">
+                      <div className="grid grid-cols-4 gap-2 p-2 pt-0 border-t">
                         {GLOW_COLORS.map(c => (
                           <div
                             key={c.id}
-                            className={`flex flex-col items-center p-1 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100'}`}
+                            className={`flex flex-col items-center p-2 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100 hover:bg-gray-50'}`}
                             onClick={() => toggleColorSelection(c.id)}
                           >
                             <div 
-                              className="w-6 h-6 rounded-full border shadow-sm"
+                              className="w-8 h-8 rounded-full border-2 shadow-sm"
                               style={{ backgroundColor: c.hex }}
                             />
-                            <span className="text-[9px] mt-0.5 text-center leading-tight text-gray-600">{c.name.slice(0, 4)}</span>
+                            <span className="text-xs mt-1 text-center leading-tight text-gray-700 font-medium">{c.name.slice(0, 4)}</span>
                           </div>
                         ))}
                       </div>
@@ -719,18 +749,18 @@ export default function BeadGenerator() {
                       </div>
                     </div>
                     {expandedCategories.has('crystal') && (
-                      <div className="grid grid-cols-4 gap-1 p-2 pt-0 border-t">
+                      <div className="grid grid-cols-4 gap-2 p-2 pt-0 border-t">
                         {CRYSTAL_COLORS.map(c => (
                           <div
                             key={c.id}
-                            className={`flex flex-col items-center p-1 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100'}`}
+                            className={`flex flex-col items-center p-2 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100 hover:bg-gray-50'}`}
                             onClick={() => toggleColorSelection(c.id)}
                           >
                             <div 
-                              className="w-6 h-6 rounded-full border shadow-sm"
+                              className="w-8 h-8 rounded-full border-2 shadow-sm"
                               style={{ backgroundColor: c.hex }}
                             />
-                            <span className="text-[9px] mt-0.5 text-center leading-tight text-gray-600">{c.name.slice(0, 4)}</span>
+                            <span className="text-xs mt-1 text-center leading-tight text-gray-700 font-medium">{c.name.slice(0, 4)}</span>
                           </div>
                         ))}
                       </div>
@@ -799,11 +829,11 @@ export default function BeadGenerator() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <div className="flex items-center gap-1 border-r pr-2">
                         <Button
-                          variant={editMode === 'none' ? 'default' : 'outline'}
+                          variant={editMode === 'drag' ? 'default' : 'outline'}
                           size="sm"
-                          onClick={() => setEditMode('none')}
+                          onClick={() => setEditMode('drag')}
                         >
-                          <MousePointer className="w-4 h-4 mr-1" />查看
+                          <Move className="w-4 h-4 mr-1" />拖拽
                         </Button>
                       </div>
                       
@@ -887,19 +917,19 @@ export default function BeadGenerator() {
                                   <span className="text-xs font-medium text-gray-700">夜光款（12色）</span>
                                   <div className="flex-1 h-px bg-gray-200" />
                                 </div>
-                                <div className="grid grid-cols-6 gap-0.5">
+                                <div className="grid grid-cols-4 gap-1">
                                   {GLOW_COLORS.map(c => (
                                     <Tooltip key={c.id}>
                                       <TooltipTrigger>
                                         <div
-                                          className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
+                                          className={`flex flex-col items-center p-1 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
                                           onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
                                         >
                                           <div
-                                            className="w-5 h-5 rounded-full border shadow-sm"
+                                            className="w-7 h-7 rounded-full border-2 shadow-sm"
                                             style={{ backgroundColor: c.hex }}
                                           />
-                                          <span className="text-[7px] text-gray-500 leading-tight">{c.name.slice(0, 2)}</span>
+                                          <span className="text-[10px] text-gray-600 leading-tight font-medium">{c.name.slice(0, 3)}</span>
                                         </div>
                                       </TooltipTrigger>
                                       <TooltipContent side="top">
@@ -917,19 +947,19 @@ export default function BeadGenerator() {
                                   <span className="text-xs font-medium text-gray-700">水晶珠（12色）</span>
                                   <div className="flex-1 h-px bg-gray-200" />
                                 </div>
-                                <div className="grid grid-cols-6 gap-0.5">
+                                <div className="grid grid-cols-4 gap-1">
                                   {CRYSTAL_COLORS.map(c => (
                                     <Tooltip key={c.id}>
                                       <TooltipTrigger>
                                         <div
-                                          className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
+                                          className={`flex flex-col items-center p-1 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : 'hover:bg-gray-100'}`}
                                           onClick={() => { setSelectedPaintColor(c); setShowColorPicker(false); }}
                                         >
                                           <div
-                                            className="w-5 h-5 rounded-full border shadow-sm"
+                                            className="w-7 h-7 rounded-full border-2 shadow-sm"
                                             style={{ backgroundColor: c.hex }}
                                           />
-                                          <span className="text-[7px] text-gray-500 leading-tight">{c.name.slice(0, 2)}</span>
+                                          <span className="text-[10px] text-gray-600 leading-tight font-medium">{c.name.slice(0, 3)}</span>
                                         </div>
                                       </TooltipTrigger>
                                       <TooltipContent side="top">
@@ -946,6 +976,18 @@ export default function BeadGenerator() {
                       )}
                       
                       <div className="flex items-center gap-1 ml-auto">
+                        <Tooltip>
+                          <TooltipTrigger>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => { setCanvasZoom(1); setCanvasOffset({ x: 0, y: 0 }); }}
+                            >
+                              <RotateCcw className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>重置视图</TooltipContent>
+                        </Tooltip>
                         <Button variant="outline" size="sm" onClick={() => setCanvasZoom(z => Math.max(0.5, z - 0.25))}>
                           <ZoomOut className="w-4 h-4" />
                         </Button>
@@ -971,12 +1013,20 @@ export default function BeadGenerator() {
                     </div>
                   ) : processedResult ? (
                     <ScrollArea className="h-[500px]" ref={containerRef}>
-                      <div className="inline-block min-w-full">
+                      <div 
+                        className="inline-block min-w-full"
+                        style={{ 
+                          transform: `translate(${canvasOffset.x}px, ${canvasOffset.y}px)`,
+                          transition: isCanvasDragging ? 'none' : 'transform 0.1s ease-out'
+                        }}
+                      >
                         <canvas 
                           ref={canvasRef} 
-                          className="shadow-lg cursor-crosshair"
+                          className={`shadow-lg ${editMode === 'drag' ? (isCanvasDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-crosshair'}`}
                           onMouseDown={handleCanvasMouseDown}
                           onMouseMove={handleCanvasMouseMove}
+                          onMouseUp={handleCanvasMouseUp}
+                          onMouseLeave={handleCanvasMouseLeave}
                           onWheel={handleCanvasWheel}
                         />
                       </div>
@@ -1082,19 +1132,19 @@ export default function BeadGenerator() {
                   {/* 夜光款 */}
                   <div className="space-y-1">
                     <div className="text-xs font-medium text-gray-600 px-1">夜光款（12色）</div>
-                    <div className="grid grid-cols-6 gap-0.5">
+                    <div className="grid grid-cols-4 gap-1">
                       {GLOW_COLORS.map(c => (
                         <Tooltip key={c.id}>
                           <TooltipTrigger>
                             <div
-                              className={`flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-100`}
+                              className={`flex flex-col items-center p-1 rounded cursor-pointer hover:bg-gray-100`}
                               onClick={() => executeColorReplace(c)}
                             >
                               <div
-                                className="w-5 h-5 rounded-full border shadow-sm"
+                                className="w-7 h-7 rounded-full border-2 shadow-sm"
                                 style={{ backgroundColor: c.hex }}
                               />
-                              <span className="text-[7px] text-gray-500">{c.name.slice(0, 2)}</span>
+                              <span className="text-[10px] text-gray-600 font-medium">{c.name.slice(0, 3)}</span>
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -1109,19 +1159,19 @@ export default function BeadGenerator() {
                   {/* 水晶珠 */}
                   <div className="space-y-1">
                     <div className="text-xs font-medium text-gray-600 px-1">水晶珠（12色）</div>
-                    <div className="grid grid-cols-6 gap-0.5">
+                    <div className="grid grid-cols-4 gap-1">
                       {CRYSTAL_COLORS.map(c => (
                         <Tooltip key={c.id}>
                           <TooltipTrigger>
                             <div
-                              className={`flex flex-col items-center p-0.5 rounded cursor-pointer hover:bg-gray-100`}
+                              className={`flex flex-col items-center p-1 rounded cursor-pointer hover:bg-gray-100`}
                               onClick={() => executeColorReplace(c)}
                             >
                               <div
-                                className="w-5 h-5 rounded-full border shadow-sm"
+                                className="w-7 h-7 rounded-full border-2 shadow-sm"
                                 style={{ backgroundColor: c.hex }}
                               />
-                              <span className="text-[7px] text-gray-500">{c.name.slice(0, 2)}</span>
+                              <span className="text-[10px] text-gray-600 font-medium">{c.name.slice(0, 3)}</span>
                             </div>
                           </TooltipTrigger>
                           <TooltipContent>
