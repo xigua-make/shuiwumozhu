@@ -106,9 +106,9 @@ export default function BeadGenerator() {
         if (color) categories.add(color.category);
       });
       
-      // 使用 gridWidth 和 gridHeight 的平均值作为 gridSize
-      const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
-      let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+      // 直接使用 gridWidth 作为处理尺寸
+      const targetSize = gridWidth;
+      let result = processImageToBeads(imageData, targetSize, Array.from(categories));
       
       // 对于六角板，需要裁剪成六角形
       if (canvasType === 'hexagon') {
@@ -241,9 +241,9 @@ export default function BeadGenerator() {
           if (color) categories.add(color.category);
         });
         
-        // 使用 gridWidth 和 gridHeight 的平均值作为 gridSize
-        const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
-        let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
+        // 直接使用 gridWidth 作为处理尺寸
+        const targetSize = gridWidth;
+        let result = processImageToBeads(imageData, targetSize, Array.from(categories));
         
         // 对于六角板，需要裁剪成六角形
         if (canvasType === 'hexagon') {
