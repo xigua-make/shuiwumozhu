@@ -171,13 +171,17 @@ export function exportBeadPattern(
     throw new Error('图纸数据无效');
   }
 
+  // 高清导出：使用2倍尺寸
+  const scale = 2;
+  const actualBeadSize = beadSize * scale;
+  
   // 计算统计区域高度
-  const statsHeight = colorStats ? 120 : 0;
-  const padding = showLabels ? 50 : 15;
+  const statsHeight = colorStats ? 140 * scale : 0;
+  const padding = showLabels ? 60 * scale : 20 * scale;
   
   const canvas = document.createElement('canvas');
-  canvas.width = width * beadSize + padding * 2;
-  canvas.height = height * beadSize + padding * 2 + statsHeight;
+  canvas.width = width * actualBeadSize + padding * 2;
+  canvas.height = height * actualBeadSize + padding * 2 + statsHeight;
   
   const ctx = canvas.getContext('2d')!;
   
@@ -190,11 +194,11 @@ export function exportBeadPattern(
     ctx.fillStyle = '#E5E5E5';
     for (let y = 0; y <= height; y++) {
       for (let x = 0; x <= width; x++) {
-        const px = padding + x * beadSize;
-        const py = padding + y * beadSize;
+        const px = padding + x * actualBeadSize;
+        const py = padding + y * actualBeadSize;
         
         ctx.beginPath();
-        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+        ctx.arc(px, py, 2 * scale, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -202,22 +206,22 @@ export function exportBeadPattern(
   
   // 绘制标签
   if (showLabels) {
-    ctx.fillStyle = '#999999';
-    ctx.font = '11px Arial';
+    ctx.fillStyle = '#666666';
+    ctx.font = `${14 * scale}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
     // 列标签
     for (let x = 0; x < width; x++) {
       if (x % 5 === 0 || x === width - 1) {
-        ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18);
+        ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 22 * scale);
       }
     }
     
     // 行标签
     for (let y = 0; y < height; y++) {
       if (y % 5 === 0 || y === height - 1) {
-        ctx.fillText((y + 1).toString(), padding - 18, padding + y * beadSize + beadSize / 2);
+        ctx.fillText((y + 1).toString(), padding - 22 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
       }
     }
   }
@@ -226,9 +230,9 @@ export function exportBeadPattern(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const bead = beads[y][x];
-      const cx = padding + x * beadSize + beadSize / 2;
-      const cy = padding + y * beadSize + beadSize / 2;
-      const radius = (beadSize / 2) - 1.5;
+      const cx = padding + x * actualBeadSize + actualBeadSize / 2;
+      const cy = padding + y * actualBeadSize + actualBeadSize / 2;
+      const radius = (actualBeadSize / 2) - 2 * scale;
       
       if (radius > 0) {
         // 绘制圆形珠子
@@ -239,7 +243,7 @@ export function exportBeadPattern(
         
         // 微妙边框
         ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = 0.5;
+        ctx.lineWidth = scale;
         ctx.stroke();
         
         // 高光效果
@@ -261,53 +265,52 @@ export function exportBeadPattern(
 
   // 绘制用料统计
   if (colorStats && colorStats.size > 0) {
-    const statsY = height * beadSize + padding * 2 + 15;
+    const statsY = height * actualBeadSize + padding * 2 + 20 * scale;
     
     // 分隔线
     ctx.strokeStyle = '#E0E0E0';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = scale;
     ctx.beginPath();
-    ctx.moveTo(padding, statsY - 5);
-    ctx.lineTo(canvas.width - padding, statsY - 5);
+    ctx.moveTo(padding, statsY - 8 * scale);
+    ctx.lineTo(canvas.width - padding, statsY - 8 * scale);
     ctx.stroke();
     
     // 标题
     ctx.fillStyle = '#333333';
-    ctx.font = 'bold 12px Arial';
+    ctx.font = `bold ${16 * scale}px Arial`;
     ctx.textAlign = 'left';
-    ctx.fillText('用料统计', padding, statsY + 10);
+    ctx.fillText('用料统计', padding, statsY + 12 * scale);
     
     // 统计总数
     const totalBeads = Array.from(colorStats.values()).reduce((sum, s) => sum + s.count, 0);
     ctx.fillStyle = '#666666';
-    ctx.font = '11px Arial';
-    ctx.fillText(`共 ${totalBeads} 颗珠子，${colorStats.size} 种颜色`, padding + 70, statsY + 10);
+    ctx.font = `${14 * scale}px Arial`;
+    ctx.fillText(`共 ${totalBeads} 颗珠子，${colorStats.size} 种颜色`, padding + 90 * scale, statsY + 12 * scale);
     
-    // 颜色列表（每行最多显示8个）
+    // 颜色列表（每行最多显示6个，显示更多细节）
     const sortedStats = Array.from(colorStats.values()).sort((a, b) => b.count - a.count);
-    const colWidth = Math.min(90, (canvas.width - padding * 2) / Math.min(sortedStats.length, 8));
+    const colWidth = Math.min(120 * scale, (canvas.width - padding * 2) / Math.min(sortedStats.length, 6));
     
     sortedStats.forEach((stat, index) => {
-      const row = Math.floor(index / 8);
-      const col = index % 8;
+      const row = Math.floor(index / 6);
+      const col = index % 6;
       const x = padding + col * colWidth;
-      const y = statsY + 35 + row * 25;
+      const y = statsY + 45 * scale + row * 30 * scale;
       
       // 颜色圆点
       ctx.beginPath();
-      ctx.arc(x + 8, y + 6, 6, 0, Math.PI * 2);
+      ctx.arc(x + 10 * scale, y + 8 * scale, 8 * scale, 0, Math.PI * 2);
       ctx.fillStyle = stat.color.hex;
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-      ctx.lineWidth = 0.5;
+      ctx.lineWidth = scale;
       ctx.stroke();
       
       // 名称和数量
       ctx.fillStyle = '#333333';
-      ctx.font = '10px Arial';
+      ctx.font = `${12 * scale}px Arial`;
       ctx.textAlign = 'left';
-      const displayName = stat.color.name.length > 4 ? stat.color.name.slice(0, 4) : stat.color.name;
-      ctx.fillText(`${displayName}×${stat.count}`, x + 18, y + 10);
+      ctx.fillText(`${stat.color.name}×${stat.count}`, x + 24 * scale, y + 12 * scale);
     });
   }
   
