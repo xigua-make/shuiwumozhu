@@ -179,9 +179,6 @@ export function exportBeadPattern(
   // 高清导出：使用2倍尺寸
   const scale = 2;
   const actualBeadSize = beadSize * scale;
-  
-  // 计算统计区域高度
-  const statsHeight = colorStats ? 200 * scale : 0;
   const padding = showLabels ? 80 * scale : 25 * scale;
   
   // 计算画布尺寸
@@ -193,6 +190,16 @@ export function exportBeadPattern(
   // 斜板：偶数列向下偏移半个珠子，需要额外高度
   if (canvasType === 'diagonal') {
     canvasHeight = height + 0.5;
+  }
+  
+  // 计算统计区域高度 - 根据颜色数量自适应
+  let statsHeight = 0;
+  if (colorStats && colorStats.size > 0) {
+    const availableWidth = canvasWidth * actualBeadSize;
+    const itemWidth = 140 * scale;
+    const cols = Math.max(4, Math.min(10, Math.floor(availableWidth / itemWidth)));
+    const rows = Math.ceil(colorStats.size / cols);
+    statsHeight = 95 * scale + rows * 36 * scale; // 标题区域 + 每行高度
   }
   
   const canvas = document.createElement('canvas');
@@ -307,7 +314,7 @@ export function exportBeadPattern(
 
   // 绘制用料统计
   if (colorStats && colorStats.size > 0) {
-    const statsY = height * actualBeadSize + padding * 2 + 25 * scale;
+    const statsY = canvasHeight * actualBeadSize + padding * 2 + 25 * scale;
     
     // 分隔线
     ctx.strokeStyle = '#E0E0E0';
@@ -329,14 +336,17 @@ export function exportBeadPattern(
     ctx.font = `${18 * scale}px Arial`;
     ctx.fillText(`共 ${totalBeads} 颗珠子，${colorStats.size} 种颜色`, padding + 120 * scale, statsY + 16 * scale);
     
-    // 颜色列表（每行最多显示6个，显示更多细节）
+    // 颜色列表 - 根据画布宽度自适应列数
     const sortedStats = Array.from(colorStats.values()).sort((a, b) => b.count - a.count);
-    const colWidth = Math.min(140 * scale, (canvas.width - padding * 2) / Math.min(sortedStats.length, 6));
+    const availableWidth = canvas.width - padding * 2;
+    const itemWidth = 140 * scale; // 每个颜色项的宽度
+    const cols = Math.max(4, Math.min(10, Math.floor(availableWidth / itemWidth))); // 自适应列数，最少4列，最多10列
+    const actualColWidth = availableWidth / cols;
     
     sortedStats.forEach((stat, index) => {
-      const row = Math.floor(index / 6);
-      const col = index % 6;
-      const x = padding + col * colWidth;
+      const row = Math.floor(index / cols);
+      const col = index % cols;
+      const x = padding + col * actualColWidth;
       const y = statsY + 55 * scale + row * 36 * scale;
       
       // 颜色圆点
