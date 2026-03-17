@@ -390,6 +390,13 @@ export default function BeadGenerator() {
     handleCanvasInteraction(e);
   };
 
+  // 鼠标滚轮缩放
+  const handleCanvasWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setCanvasZoom(prev => Math.min(3, Math.max(0.5, prev + delta)));
+  };
+
   const handleCanvasInteraction = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!processedResult || !canvasRef.current) return;
     
@@ -622,25 +629,19 @@ export default function BeadGenerator() {
                       </div>
                     </div>
                     {expandedCategories.has('normal') && (
-                      <div className="grid grid-cols-6 gap-1 p-2 pt-0 border-t">
+                      <div className="grid grid-cols-4 gap-1 p-2 pt-0 border-t">
                         {NORMAL_COLORS.map(c => (
-                          <Tooltip key={c.id}>
-                            <TooltipTrigger>
-                              <div 
-                                className={`w-full aspect-square rounded cursor-pointer relative ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500' : 'opacity-50'}`}
-                                style={{ backgroundColor: c.hex }}
-                                onClick={() => toggleColorSelection(c.id)}
-                              >
-                                {selectedColorIds.has(c.id) && (
-                                  <Check className="absolute inset-0 m-auto w-3 h-3 text-white drop-shadow" />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p>{c.name}</p>
-                              <p className="text-xs text-gray-400">{c.hex}</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <div
+                            key={c.id}
+                            className={`flex flex-col items-center p-1 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100'}`}
+                            onClick={() => toggleColorSelection(c.id)}
+                          >
+                            <div 
+                              className="w-6 h-6 rounded-full border shadow-sm"
+                              style={{ backgroundColor: c.hex }}
+                            />
+                            <span className="text-[9px] mt-0.5 text-center leading-tight text-gray-600">{c.name.slice(0, 4)}</span>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -672,25 +673,19 @@ export default function BeadGenerator() {
                       </div>
                     </div>
                     {expandedCategories.has('glow') && (
-                      <div className="grid grid-cols-6 gap-1 p-2 pt-0 border-t">
+                      <div className="grid grid-cols-4 gap-1 p-2 pt-0 border-t">
                         {GLOW_COLORS.map(c => (
-                          <Tooltip key={c.id}>
-                            <TooltipTrigger>
-                              <div 
-                                className={`w-full aspect-square rounded cursor-pointer relative ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500' : 'opacity-50'}`}
-                                style={{ backgroundColor: c.hex }}
-                                onClick={() => toggleColorSelection(c.id)}
-                              >
-                                {selectedColorIds.has(c.id) && (
-                                  <Check className="absolute inset-0 m-auto w-3 h-3 text-white drop-shadow" />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p>{c.name}</p>
-                              <p className="text-xs text-gray-400">{c.hex}</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <div
+                            key={c.id}
+                            className={`flex flex-col items-center p-1 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100'}`}
+                            onClick={() => toggleColorSelection(c.id)}
+                          >
+                            <div 
+                              className="w-6 h-6 rounded-full border shadow-sm"
+                              style={{ backgroundColor: c.hex }}
+                            />
+                            <span className="text-[9px] mt-0.5 text-center leading-tight text-gray-600">{c.name.slice(0, 4)}</span>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -722,25 +717,19 @@ export default function BeadGenerator() {
                       </div>
                     </div>
                     {expandedCategories.has('crystal') && (
-                      <div className="grid grid-cols-6 gap-1 p-2 pt-0 border-t">
+                      <div className="grid grid-cols-4 gap-1 p-2 pt-0 border-t">
                         {CRYSTAL_COLORS.map(c => (
-                          <Tooltip key={c.id}>
-                            <TooltipTrigger>
-                              <div 
-                                className={`w-full aspect-square rounded cursor-pointer relative ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500' : 'opacity-50'}`}
-                                style={{ backgroundColor: c.hex }}
-                                onClick={() => toggleColorSelection(c.id)}
-                              >
-                                {selectedColorIds.has(c.id) && (
-                                  <Check className="absolute inset-0 m-auto w-3 h-3 text-white drop-shadow" />
-                                )}
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent side="top">
-                              <p>{c.name}</p>
-                              <p className="text-xs text-gray-400">{c.hex}</p>
-                            </TooltipContent>
-                          </Tooltip>
+                          <div
+                            key={c.id}
+                            className={`flex flex-col items-center p-1 rounded cursor-pointer transition-all ${selectedColorIds.has(c.id) ? 'ring-2 ring-purple-500 bg-purple-50' : 'opacity-60 hover:opacity-100'}`}
+                            onClick={() => toggleColorSelection(c.id)}
+                          >
+                            <div 
+                              className="w-6 h-6 rounded-full border shadow-sm"
+                              style={{ backgroundColor: c.hex }}
+                            />
+                            <span className="text-[9px] mt-0.5 text-center leading-tight text-gray-600">{c.name.slice(0, 4)}</span>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -841,33 +830,49 @@ export default function BeadGenerator() {
                       </div>
                       
                       {(editMode === 'brush' || editMode === 'replace') && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1 flex-wrap">
                           <span className="text-xs text-gray-500">颜色:</span>
-                          <div className="flex gap-1">
-                            {ALL_COLORS.slice(0, 12).map(c => (
-                              <div
-                                key={c.id}
-                                className={`w-6 h-6 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500' : ''}`}
-                                style={{ backgroundColor: c.hex }}
-                                onClick={() => setSelectedPaintColor(c)}
-                              />
+                          <div className="flex gap-0.5">
+                            {ALL_COLORS.slice(0, 8).map(c => (
+                              <Tooltip key={c.id}>
+                                <TooltipTrigger>
+                                  <div
+                                    className={`flex flex-col items-center p-0.5 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
+                                    onClick={() => setSelectedPaintColor(c)}
+                                  >
+                                    <div
+                                      className="w-5 h-5 rounded-full border"
+                                      style={{ backgroundColor: c.hex }}
+                                    />
+                                    <span className="text-[8px] text-gray-500">{c.name.slice(0, 2)}</span>
+                                  </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{c.name}</p>
+                                  <p className="text-xs text-gray-400">{c.hex}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             ))}
                             <Tooltip>
                               <TooltipTrigger>
-                                <div className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-xs">
-                                  +{ALL_COLORS.length - 12}
+                                <div className="w-6 h-7 rounded bg-gray-100 flex items-center justify-center text-[10px] font-medium">
+                                  +{ALL_COLORS.length - 8}
                                 </div>
                               </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="grid grid-cols-6 gap-1 p-2">
+                              <TooltipContent className="max-w-[400px]">
+                                <div className="grid grid-cols-8 gap-1 p-2">
                                   {ALL_COLORS.map(c => (
                                     <div
                                       key={c.id}
-                                      className={`w-6 h-6 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500' : ''}`}
-                                      style={{ backgroundColor: c.hex }}
+                                      className={`flex flex-col items-center p-1 rounded cursor-pointer ${selectedPaintColor?.id === c.id ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
                                       onClick={() => setSelectedPaintColor(c)}
-                                      title={c.name}
-                                    />
+                                    >
+                                      <div
+                                        className="w-5 h-5 rounded-full border"
+                                        style={{ backgroundColor: c.hex }}
+                                      />
+                                      <span className="text-[8px] text-gray-500">{c.name.slice(0, 2)}</span>
+                                    </div>
                                   ))}
                                 </div>
                               </TooltipContent>
@@ -908,6 +913,7 @@ export default function BeadGenerator() {
                           className="shadow-lg cursor-crosshair"
                           onMouseDown={handleCanvasMouseDown}
                           onMouseMove={handleCanvasMouseMove}
+                          onWheel={handleCanvasWheel}
                         />
                       </div>
                     </ScrollArea>
