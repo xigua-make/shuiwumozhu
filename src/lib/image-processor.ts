@@ -181,8 +181,8 @@ export function exportBeadPattern(
   const actualBeadSize = beadSize * scale;
   
   // 计算统计区域高度
-  const statsHeight = colorStats ? 140 * scale : 0;
-  const padding = showLabels ? 60 * scale : 20 * scale;
+  const statsHeight = colorStats ? 200 * scale : 0;
+  const padding = showLabels ? 70 * scale : 25 * scale;
   
   // 计算画布尺寸
   let canvasWidth = width;
@@ -235,7 +235,7 @@ export function exportBeadPattern(
   // 绘制标签
   if (showLabels) {
     ctx.fillStyle = '#666666';
-    ctx.font = `${14 * scale}px Arial`;
+    ctx.font = `${18 * scale}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
@@ -243,20 +243,20 @@ export function exportBeadPattern(
       // 六角板只显示行标签
       for (let y = 0; y < height; y++) {
         if (y % 2 === 0 || y === height - 1) {
-          ctx.fillText((y + 1).toString(), padding - 22 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+          ctx.fillText((y + 1).toString(), padding - 28 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
         }
       }
     } else {
       // 矩形和斜板标签
       for (let x = 0; x < width; x++) {
         if (x % 5 === 0 || x === width - 1) {
-          ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 22 * scale);
+          ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 28 * scale);
         }
       }
       
       for (let y = 0; y < height; y++) {
         if (y % 5 === 0 || y === height - 1) {
-          ctx.fillText((y + 1).toString(), padding - 22 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+          ctx.fillText((y + 1).toString(), padding - 28 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
         }
       }
     }
@@ -313,41 +313,41 @@ export function exportBeadPattern(
 
   // 绘制用料统计
   if (colorStats && colorStats.size > 0) {
-    const statsY = height * actualBeadSize + padding * 2 + 20 * scale;
+    const statsY = height * actualBeadSize + padding * 2 + 25 * scale;
     
     // 分隔线
     ctx.strokeStyle = '#E0E0E0';
     ctx.lineWidth = scale;
     ctx.beginPath();
-    ctx.moveTo(padding, statsY - 8 * scale);
-    ctx.lineTo(canvas.width - padding, statsY - 8 * scale);
+    ctx.moveTo(padding, statsY - 10 * scale);
+    ctx.lineTo(canvas.width - padding, statsY - 10 * scale);
     ctx.stroke();
     
     // 标题
     ctx.fillStyle = '#333333';
-    ctx.font = `bold ${16 * scale}px Arial`;
+    ctx.font = `bold ${22 * scale}px Arial`;
     ctx.textAlign = 'left';
-    ctx.fillText('用料统计', padding, statsY + 12 * scale);
+    ctx.fillText('用料统计', padding, statsY + 16 * scale);
     
     // 统计总数
     const totalBeads = Array.from(colorStats.values()).reduce((sum, s) => sum + s.count, 0);
     ctx.fillStyle = '#666666';
-    ctx.font = `${14 * scale}px Arial`;
-    ctx.fillText(`共 ${totalBeads} 颗珠子，${colorStats.size} 种颜色`, padding + 90 * scale, statsY + 12 * scale);
+    ctx.font = `${18 * scale}px Arial`;
+    ctx.fillText(`共 ${totalBeads} 颗珠子，${colorStats.size} 种颜色`, padding + 120 * scale, statsY + 16 * scale);
     
     // 颜色列表（每行最多显示6个，显示更多细节）
     const sortedStats = Array.from(colorStats.values()).sort((a, b) => b.count - a.count);
-    const colWidth = Math.min(120 * scale, (canvas.width - padding * 2) / Math.min(sortedStats.length, 6));
+    const colWidth = Math.min(140 * scale, (canvas.width - padding * 2) / Math.min(sortedStats.length, 6));
     
     sortedStats.forEach((stat, index) => {
       const row = Math.floor(index / 6);
       const col = index % 6;
       const x = padding + col * colWidth;
-      const y = statsY + 45 * scale + row * 30 * scale;
+      const y = statsY + 55 * scale + row * 36 * scale;
       
       // 颜色圆点
       ctx.beginPath();
-      ctx.arc(x + 10 * scale, y + 8 * scale, 8 * scale, 0, Math.PI * 2);
+      ctx.arc(x + 12 * scale, y + 10 * scale, 10 * scale, 0, Math.PI * 2);
       ctx.fillStyle = stat.color.hex;
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.2)';
@@ -356,9 +356,9 @@ export function exportBeadPattern(
       
       // 名称和数量
       ctx.fillStyle = '#333333';
-      ctx.font = `${12 * scale}px Arial`;
+      ctx.font = `${16 * scale}px Arial`;
       ctx.textAlign = 'left';
-      ctx.fillText(`${stat.color.name}×${stat.count}`, x + 24 * scale, y + 12 * scale);
+      ctx.fillText(`${stat.color.name}×${stat.count}`, x + 28 * scale, y + 14 * scale);
     });
   }
   

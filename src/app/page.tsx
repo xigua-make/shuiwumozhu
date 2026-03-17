@@ -459,23 +459,48 @@ export default function BeadGenerator() {
     setCanvasOffset({ x: 0, y: 0 });
   }, []);
 
-  // 应用预设 - 创建空白画布
+  // 应用预设 - 如果已上传图片则重新处理，否则创建空白画布
   const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
+    // 先设置画布类型
+    let newType: CanvasType = 'rect';
+    let newWidth = 20;
+    let newHeight = 20;
+    
     switch (preset) {
       case 'hexagon':
-        createBlankCanvas(HEXAGON_MAX_WIDTH, HEXAGON_HEIGHT, 'hexagon');
+        newType = 'hexagon';
+        newWidth = HEXAGON_MAX_WIDTH;
+        newHeight = HEXAGON_HEIGHT;
         break;
       case 'small-square':
-        createBlankCanvas(16, 16, 'rect');
+        newType = 'rect';
+        newWidth = 16;
+        newHeight = 16;
         break;
       case 'large-square':
-        createBlankCanvas(21, 21, 'rect');
+        newType = 'rect';
+        newWidth = 21;
+        newHeight = 21;
         break;
       case 'diagonal':
-        createBlankCanvas(21, 21, 'diagonal');
+        newType = 'diagonal';
+        newWidth = 21;
+        newHeight = 21;
         break;
     }
-  }, [createBlankCanvas]);
+    
+    setCanvasType(newType);
+    setGridWidth(newWidth);
+    setGridHeight(newHeight);
+    
+    // 如果已上传图片，延迟后重新处理
+    if (originalImage) {
+      setTimeout(() => reprocessImage(), 50);
+    } else {
+      // 否则创建空白画布
+      createBlankCanvas(newWidth, newHeight, newType);
+    }
+  }, [createBlankCanvas, originalImage, reprocessImage]);
 
   // 颜色类别展开/收起
   const toggleCategoryExpand = (category: ColorCategory) => {
@@ -538,7 +563,7 @@ export default function BeadGenerator() {
     const { beads, width, height } = processedResult;
     const beadSize = 18 * canvasZoom;
     
-    const padding = showCoordinates ? 45 : 15;
+    const padding = showCoordinates ? 55 : 15;
     
     // 对于六角板和斜板，宽度取最大值
     let canvasWidth = width;
@@ -593,19 +618,19 @@ export default function BeadGenerator() {
     // 绘制坐标标签（每行每列都显示）
     if (showCoordinates) {
       ctx.fillStyle = '#666666';
-      ctx.font = `${11 * canvasZoom}px Arial`;
+      ctx.font = `${14 * canvasZoom}px Arial`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       if (canvasType === 'hexagon') {
         // 六角板标签 - 显示行号
         for (let y = 0; y < height; y++) {
-          ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          ctx.fillText((y + 1).toString(), padding - 22 * canvasZoom, padding + y * beadSize + beadSize / 2);
         }
       } else {
         // 矩形和斜板标签 - 每行每列都显示
         for (let x = 0; x < width; x++) {
-          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
+          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 22 * canvasZoom);
         }
         
         for (let y = 0; y < height; y++) {
