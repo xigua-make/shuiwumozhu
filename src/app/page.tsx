@@ -392,12 +392,8 @@ export default function BeadGenerator() {
     setCanvasOffset({ x: 0, y: 0 });
   }, []);
 
-  // 应用预设 - 设置参数并清空当前结果
+  // 应用预设 - 设置参数
   const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square' | 'diagonal') => {
-    // 清空当前结果
-    setProcessedResult(null);
-    setOriginalImage(null);
-    
     switch (preset) {
       case 'hexagon':
         // 六角板需要创建空白画布，因为它的结构特殊
