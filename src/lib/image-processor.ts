@@ -12,6 +12,123 @@ export interface ProcessResult {
   colorStats: Map<string, { color: BeadColor; count: number }>;
 }
 
+// 提取网格单元的主色调（使用改进的颜色提取算法）
+function extractDominantColor(
+  data: Uint8ClampedArray,
+  startX: number, startY: number,
+  cellWidth: number, cellHeight: number,
+  imageWidth: number, imageHeight: number
+): [number, number, number] {
+  const pixels: { r: number; g: number; b: number; weight: number }[] = [];
+  const centerX = startX + cellWidth / 2;
+  const centerY = startY + cellHeight / 2;
+  const maxDist = Math.sqrt(cellWidth * cellWidth + cellHeight * cellHeight) / 2;
+  
+  // 收集所有有效像素，并计算权重（中心像素权重更高）
+  for (let y = startY; y < startY + cellHeight && y < imageHeight; y++) {
+    for (let x = startX; x < startX + cellWidth && x < imageWidth; x++) {
+      const idx = (y * imageWidth + x) * 4;
+      const a = data[idx + 3];
+      
+      if (a > 128) { // 忽略透明像素
+        const r = data[idx];
+        const g = data[idx + 1];
+        const b = data[idx + 2];
+        
+        // 计算到中心的距离，中心权重更高
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const weight = 1 - (dist / maxDist) * 0.5; // 中心权重范围：1.0 - 0.5
+        
+        pixels.push({ r, g, b, weight });
+      }
+    }
+  }
+  
+  if (pixels.length === 0) {
+    return [255, 255, 255];
+  }
+  
+  // 如果像素数量较少，直接使用加权平均
+  if (pixels.length < 10) {
+    let totalR = 0, totalG = 0, totalB = 0, totalWeight = 0;
+    for (const p of pixels) {
+      totalR += p.r * p.weight;
+      totalG += p.g * p.weight;
+      totalB += p.b * p.weight;
+      totalWeight += p.weight;
+    }
+    return [
+      Math.round(totalR / totalWeight),
+      Math.round(totalG / totalWeight),
+      Math.round(totalB / totalWeight)
+    ];
+  }
+  
+  // 对于较多像素，使用颜色聚类找出主色调
+  // 简化版K-means：将像素按颜色分组，找到最大的组
+  
+  // 步骤1: 颜色量化（减少颜色种类）
+  const quantizedPixels = pixels.map(p => ({
+    r: Math.round(p.r / 32) * 32,
+    g: Math.round(p.g / 32) * 32,
+    b: Math.round(p.b / 32) * 32,
+    weight: p.weight
+  }));
+  
+  // 步骤2: 按量化颜色分组
+  const colorGroups = new Map<string, { totalWeight: number; originalPixels: { r: number; g: number; b: number; weight: number }[] }>();
+  
+  for (const p of quantizedPixels) {
+    const key = `${p.r},${p.g},${p.b}`;
+    if (!colorGroups.has(key)) {
+      colorGroups.set(key, { totalWeight: 0, originalPixels: [] });
+    }
+    const group = colorGroups.get(key)!;
+    group.totalWeight += p.weight;
+    group.originalPixels.push(p);
+  }
+  
+  // 步骤3: 找到权重最大的颜色组
+  let dominantGroup: { totalWeight: number; originalPixels: { r: number; g: number; b: number; weight: number }[] } | null = null;
+  for (const group of colorGroups.values()) {
+    if (!dominantGroup || group.totalWeight > dominantGroup.totalWeight) {
+      dominantGroup = group;
+    }
+  }
+  
+  // 步骤4: 计算主色调组的加权平均颜色
+  if (dominantGroup) {
+    let totalR = 0, totalG = 0, totalB = 0, totalWeight = 0;
+    for (const p of dominantGroup.originalPixels) {
+      totalR += p.r * p.weight;
+      totalG += p.g * p.weight;
+      totalB += p.b * p.weight;
+      totalWeight += p.weight;
+    }
+    return [
+      Math.round(totalR / totalWeight),
+      Math.round(totalG / totalWeight),
+      Math.round(totalB / totalWeight)
+    ];
+  }
+  
+  // 兜底：使用所有像素的加权平均
+  let totalR = 0, totalG = 0, totalB = 0, totalWeight = 0;
+  for (const p of pixels) {
+    totalR += p.r * p.weight;
+    totalG += p.g * p.weight;
+    totalB += p.b * p.weight;
+    totalWeight += p.weight;
+  }
+  return [
+    Math.round(totalR / totalWeight),
+    Math.round(totalG / totalWeight),
+    Math.round(totalB / totalWeight)
+  ];
+}
+
 // 将图片处理成魔珠图纸
 export function processImageToBeads(
   imageData: ImageData,
@@ -38,45 +155,26 @@ export function processImageToBeads(
     const row: ProcessedBead[] = [];
     
     for (let gx = 0; gx < gridWidth; gx++) {
-      // 计算该网格单元的平均颜色
+      // 计算该网格单元的主色调
       const startX = gx * cellWidth;
       const startY = gy * cellHeight;
       
-      let totalR = 0, totalG = 0, totalB = 0, totalA = 0;
-      let pixelCount = 0;
-
-      // 遍历网格内的所有像素
-      for (let y = startY; y < startY + cellHeight && y < height; y++) {
-        for (let x = startX; x < startX + cellWidth && x < width; x++) {
-          const idx = (y * width + x) * 4;
-          const r = data[idx];
-          const g = data[idx + 1];
-          const b = data[idx + 2];
-          const a = data[idx + 3];
-
-          if (a > 128) { // 忽略透明像素
-            totalR += r;
-            totalG += g;
-            totalB += b;
-            totalA += a;
-            pixelCount++;
-          }
-        }
-      }
-
+      // 使用改进的主色调提取算法
+      const [avgR, avgG, avgB] = extractDominantColor(
+        data, startX, startY, cellWidth, cellHeight, width, height
+      );
+        
       let originalRgb: [number, number, number];
       let beadColor: BeadColor;
 
-      if (pixelCount === 0) {
-        // 如果没有有效像素，使用默认颜色
+      // 检查是否是空白区域（接近白色）
+      const brightness = (avgR + avgG + avgB) / 3;
+      
+      if (brightness > 250) {
+        // 非常接近白色，使用默认颜色
         originalRgb = [255, 255, 255];
         beadColor = defaultColor;
       } else {
-        // 计算平均颜色
-        const avgR = Math.round(totalR / pixelCount);
-        const avgG = Math.round(totalG / pixelCount);
-        const avgB = Math.round(totalB / pixelCount);
-        
         originalRgb = [avgR, avgG, avgB];
         
         // 在选定颜色集中找到最接近的魔珠颜色

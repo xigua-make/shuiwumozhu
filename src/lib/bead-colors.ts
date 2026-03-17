@@ -108,19 +108,156 @@ export function getColorsByCategories(categories: ColorCategory[]): BeadColor[] 
   return colors;
 }
 
-// 计算两个颜色之间的距离（欧氏距离）
+// 计算两个颜色之间的距离（加权欧氏距离 - 考虑人眼感知）
+// 人眼对绿色最敏感，红色次之，蓝色最不敏感
 export function colorDistance(
   r1: number, g1: number, b1: number,
   r2: number, g2: number, b2: number
 ): number {
+  // 使用加权欧氏距离，权重基于人眼对不同颜色的敏感度
+  const rMean = (r1 + r2) / 2;
+  const weightR = 2 + rMean / 256;
+  const weightG = 4;
+  const weightB = 2 + (255 - rMean) / 256;
+  
   return Math.sqrt(
-    Math.pow(r1 - r2, 2) +
-    Math.pow(g1 - g2, 2) +
+    weightR * Math.pow(r1 - r2, 2) +
+    weightG * Math.pow(g1 - g2, 2) +
+    weightB * Math.pow(b1 - b2, 2)
+  );
+}
+
+// RGB转Lab颜色空间（更接近人眼感知）
+export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+  // RGB to XYZ
+  let rr = r / 255;
+  let gg = g / 255;
+  let bb = b / 255;
+  
+  rr = rr > 0.04045 ? Math.pow((rr + 0.055) / 1.055, 2.4) : rr / 12.92;
+  gg = gg > 0.04045 ? Math.pow((gg + 0.055) / 1.055, 2.4) : gg / 12.92;
+  bb = bb > 0.04045 ? Math.pow((bb + 0.055) / 1.055, 2.4) : bb / 12.92;
+  
+  rr *= 100;
+  gg *= 100;
+  bb *= 100;
+  
+  const x = rr * 0.4124 + gg * 0.3576 + bb * 0.1805;
+  const y = rr * 0.2126 + gg * 0.7152 + bb * 0.0722;
+  const z = rr * 0.0193 + gg * 0.1192 + bb * 0.9505;
+  
+  // XYZ to Lab
+  const refX = 95.047;
+  const refY = 100.000;
+  const refZ = 108.883;
+  
+  let xx = x / refX;
+  let yy = y / refY;
+  let zz = z / refZ;
+  
+  xx = xx > 0.008856 ? Math.pow(xx, 1/3) : (7.787 * xx) + 16/116;
+  yy = yy > 0.008856 ? Math.pow(yy, 1/3) : (7.787 * yy) + 16/116;
+  zz = zz > 0.008856 ? Math.pow(zz, 1/3) : (7.787 * zz) + 16/116;
+  
+  const L = (116 * yy) - 16;
+  const a = 500 * (xx - yy);
+  const bLab = 200 * (yy - zz);  // 重命名避免与参数b冲突
+  
+  return [L, a, bLab];
+}
+
+// 计算Lab颜色空间的距离（更准确的颜色感知差异）
+export function labDistance(lab1: [number, number, number], lab2: [number, number, number]): number {
+  const [L1, a1, b1] = lab1;
+  const [L2, a2, b2] = lab2;
+  
+  // CIE76 色差公式
+  return Math.sqrt(
+    Math.pow(L1 - L2, 2) +
+    Math.pow(a1 - a2, 2) +
     Math.pow(b1 - b2, 2)
   );
 }
 
-// 在指定颜色集中找到最接近的魔珠颜色
+// CIEDE2000 色差公式（最精确的人眼感知色差）
+export function ciede2000(lab1: [number, number, number], lab2: [number, number, number]): number {
+  const [L1, a1, b1] = lab1;
+  const [L2, a2, b2] = lab2;
+  
+  const kL = 1, kC = 1, kH = 1;
+  
+  const C1 = Math.sqrt(a1 * a1 + b1 * b1);
+  const C2 = Math.sqrt(a2 * a2 + b2 * b2);
+  const Cmean = (C1 + C2) / 2;
+  
+  const G = 0.5 * (1 - Math.sqrt(Math.pow(Cmean, 7) / (Math.pow(Cmean, 7) + Math.pow(25, 7))));
+  
+  const a1p = a1 * (1 + G);
+  const a2p = a2 * (1 + G);
+  
+  const C1p = Math.sqrt(a1p * a1p + b1 * b1);
+  const C2p = Math.sqrt(a2p * a2p + b2 * b2);
+  
+  let h1p = Math.atan2(b1, a1p) * 180 / Math.PI;
+  if (h1p < 0) h1p += 360;
+  
+  let h2p = Math.atan2(b2, a2p) * 180 / Math.PI;
+  if (h2p < 0) h2p += 360;
+  
+  const dLp = L2 - L1;
+  const dCp = C2p - C1p;
+  
+  let dhp: number;
+  if (C1p * C2p === 0) {
+    dhp = 0;
+  } else if (Math.abs(h2p - h1p) <= 180) {
+    dhp = h2p - h1p;
+  } else if (h2p - h1p > 180) {
+    dhp = h2p - h1p - 360;
+  } else {
+    dhp = h2p - h1p + 360;
+  }
+  
+  const dHp = 2 * Math.sqrt(C1p * C2p) * Math.sin(dhp * Math.PI / 360);
+  
+  const Lpm = (L1 + L2) / 2;
+  const Cpm = (C1p + C2p) / 2;
+  
+  let Hpm: number;
+  if (C1p * C2p === 0) {
+    Hpm = h1p + h2p;
+  } else if (Math.abs(h1p - h2p) <= 180) {
+    Hpm = (h1p + h2p) / 2;
+  } else if (h1p + h2p < 360) {
+    Hpm = (h1p + h2p + 360) / 2;
+  } else {
+    Hpm = (h1p + h2p - 360) / 2;
+  }
+  
+  const T = 1 - 0.17 * Math.cos((Hpm - 30) * Math.PI / 180)
+          + 0.24 * Math.cos(2 * Hpm * Math.PI / 180)
+          + 0.32 * Math.cos((3 * Hpm + 6) * Math.PI / 180)
+          - 0.20 * Math.cos((4 * Hpm - 63) * Math.PI / 180);
+  
+  const SL = 1 + 0.015 * Math.pow(Lpm - 50, 2) / Math.sqrt(20 + Math.pow(Lpm - 50, 2));
+  const SC = 1 + 0.045 * Cpm;
+  const SH = 1 + 0.015 * Cpm * T;
+  
+  const dTheta = 30 * Math.exp(-Math.pow((Hpm - 275) / 25, 2));
+  const RC = 2 * Math.sqrt(Math.pow(Cpm, 7) / (Math.pow(Cpm, 7) + Math.pow(25, 7)));
+  const RT = -RC * Math.sin(2 * dTheta * Math.PI / 180);
+  
+  const dE = Math.sqrt(
+    Math.pow(dLp / (kL * SL), 2) +
+    Math.pow(dCp / (kC * SC), 2) +
+    Math.pow(dHp / (kH * SH), 2) +
+    RT * (dCp / (kC * SC)) * (dHp / (kH * SH))
+  );
+  
+  return dE;
+}
+
+// 在指定颜色集中找到最接近的魔珠颜色（使用CIEDE2000）
 export function findClosestBeadColor(
   r: number, 
   g: number, 
@@ -130,8 +267,44 @@ export function findClosestBeadColor(
   let closestColor = colors[0];
   let minDistance = Infinity;
 
+  // 将目标颜色转换为Lab
+  const targetLab = rgbToLab(r, g, b);
+  
+  // 判断目标颜色的主要特征
+  const brightness = (r + g + b) / 3;
+  const maxChannel = Math.max(r, g, b);
+  const minChannel = Math.min(r, g, b);
+  const saturation = maxChannel === 0 ? 0 : (maxChannel - minChannel) / maxChannel;
+
   for (const beadColor of colors) {
-    const distance = colorDistance(r, g, b, ...beadColor.rgb);
+    // 将珠子颜色转换为Lab
+    const beadLab = rgbToLab(...beadColor.rgb);
+    
+    // 使用CIEDE2000计算色差
+    let distance = ciede2000(targetLab, beadLab);
+    
+    // 特殊处理：黑色和白色
+    // 如果目标颜色非常暗（接近黑色），增加非黑色候选的距离
+    if (brightness < 30 && beadColor.rgb[0] + beadColor.rgb[1] + beadColor.rgb[2] > 100) {
+      distance *= 1.5;
+    }
+    // 如果目标颜色非常亮（接近白色），增加非白色候选的距离
+    if (brightness > 230 && beadColor.rgb[0] + beadColor.rgb[1] + beadColor.rgb[2] < 650) {
+      distance *= 1.3;
+    }
+    
+    // 特殊处理：高饱和度颜色
+    // 如果目标颜色饱和度高，优先选择同样高饱和度的珠子
+    if (saturation > 0.5) {
+      const beadMax = Math.max(...beadColor.rgb);
+      const beadMin = Math.min(...beadColor.rgb);
+      const beadSat = beadMax === 0 ? 0 : (beadMax - beadMin) / beadMax;
+      // 如果珠子颜色饱和度低，增加距离
+      if (beadSat < 0.3) {
+        distance *= 1.2;
+      }
+    }
+    
     if (distance < minDistance) {
       minDistance = distance;
       closestColor = beadColor;
