@@ -106,24 +106,9 @@ export default function BeadGenerator() {
         if (color) categories.add(color.category);
       });
       
-      // 根据画布类型确定目标尺寸
-      let targetWidth = gridWidth;
-      let targetHeight = gridHeight;
-      
-      if (canvasType === 'hexagon') {
-        targetWidth = HEXAGON_MAX_WIDTH;
-        targetHeight = HEXAGON_HEIGHT;
-      }
-      
-      // 直接使用目标尺寸作为 gridSize
-      let result = processImageToBeads(imageData, targetWidth, Array.from(categories));
-      
-      // 确保输出的高度与目标一致
-      if (result.height !== targetHeight) {
-        // 需要调整高度 - 使用平均值重新计算
-        const avgSize = Math.round((targetWidth + targetHeight) / 2);
-        result = processImageToBeads(imageData, avgSize, Array.from(categories));
-      }
+      // 使用 gridWidth 和 gridHeight 的平均值作为 gridSize
+      const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
+      let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
       
       // 对于六角板，需要裁剪成六角形
       if (canvasType === 'hexagon') {
@@ -256,24 +241,9 @@ export default function BeadGenerator() {
           if (color) categories.add(color.category);
         });
         
-        // 根据画布类型确定目标尺寸
-        let targetWidth = gridWidth;
-        let targetHeight = gridHeight;
-        
-        if (canvasType === 'hexagon') {
-          targetWidth = HEXAGON_MAX_WIDTH;
-          targetHeight = HEXAGON_HEIGHT;
-        }
-        
-        // 直接使用目标尺寸作为 gridSize
-        let result = processImageToBeads(imageData, targetWidth, Array.from(categories));
-        
-        // 确保输出的高度与目标一致
-        if (result.height !== targetHeight) {
-          // 需要调整高度 - 使用平均值重新计算
-          const avgSize = Math.round((targetWidth + targetHeight) / 2);
-          result = processImageToBeads(imageData, avgSize, Array.from(categories));
-        }
+        // 使用 gridWidth 和 gridHeight 的平均值作为 gridSize
+        const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
+        let result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
         
         // 对于六角板，需要裁剪成六角形
         if (canvasType === 'hexagon') {
