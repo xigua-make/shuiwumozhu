@@ -973,7 +973,7 @@ export default function BeadGenerator() {
           {/* 标题 */}
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-              水雾魔珠生成器
+              西瓜制作-水雾魔珠生成器
             </h1>
             <p className="text-gray-600">上传图片，自动生成魔珠图纸，支持编辑修改</p>
           </div>
