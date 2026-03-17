@@ -229,7 +229,8 @@ export default function BeadGenerator() {
       `水雾魔珠图纸-${Date.now()}.png`,
       24, // 导出时使用较大的珠子尺寸
       showGrid,
-      showLabels
+      showLabels,
+      processedResult.colorStats
     );
   };
 
@@ -263,6 +264,13 @@ export default function BeadGenerator() {
       }
     });
   };
+
+  // 颜色类别变化时自动重新处理
+  useEffect(() => {
+    if (originalImage && processedResult) {
+      reprocessImage();
+    }
+  }, [colorCategories]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50">

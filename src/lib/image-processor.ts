@@ -156,12 +156,13 @@ export function loadImageToCanvas(file: File): Promise<HTMLCanvasElement> {
   });
 }
 
-// 导出图纸为图片（水雾魔珠样式：圆形珠子 + 点阵网格）
+// 导出图纸为图片（水雾魔珠样式：圆形珠子 + 点阵网格 + 用料统计）
 export function exportBeadPattern(
   beads: ProcessedBead[][],
   beadSize: number = 20,
   showGrid: boolean = true,
-  showLabels: boolean = true
+  showLabels: boolean = true,
+  colorStats?: Map<string, { color: BeadColor; count: number }>
 ): HTMLCanvasElement {
   const height = beads.length;
   const width = beads[0]?.length || 0;
@@ -170,11 +171,13 @@ export function exportBeadPattern(
     throw new Error('图纸数据无效');
   }
 
-  const canvas = document.createElement('canvas');
+  // 计算统计区域高度
+  const statsHeight = colorStats ? 120 : 0;
   const padding = showLabels ? 50 : 15;
   
+  const canvas = document.createElement('canvas');
   canvas.width = width * beadSize + padding * 2;
-  canvas.height = height * beadSize + padding * 2;
+  canvas.height = height * beadSize + padding * 2 + statsHeight;
   
   const ctx = canvas.getContext('2d')!;
   
@@ -255,6 +258,58 @@ export function exportBeadPattern(
       }
     }
   }
+
+  // 绘制用料统计
+  if (colorStats && colorStats.size > 0) {
+    const statsY = height * beadSize + padding * 2 + 15;
+    
+    // 分隔线
+    ctx.strokeStyle = '#E0E0E0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padding, statsY - 5);
+    ctx.lineTo(canvas.width - padding, statsY - 5);
+    ctx.stroke();
+    
+    // 标题
+    ctx.fillStyle = '#333333';
+    ctx.font = 'bold 12px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('用料统计', padding, statsY + 10);
+    
+    // 统计总数
+    const totalBeads = Array.from(colorStats.values()).reduce((sum, s) => sum + s.count, 0);
+    ctx.fillStyle = '#666666';
+    ctx.font = '11px Arial';
+    ctx.fillText(`共 ${totalBeads} 颗珠子，${colorStats.size} 种颜色`, padding + 70, statsY + 10);
+    
+    // 颜色列表（每行最多显示8个）
+    const sortedStats = Array.from(colorStats.values()).sort((a, b) => b.count - a.count);
+    const colWidth = Math.min(90, (canvas.width - padding * 2) / Math.min(sortedStats.length, 8));
+    
+    sortedStats.forEach((stat, index) => {
+      const row = Math.floor(index / 8);
+      const col = index % 8;
+      const x = padding + col * colWidth;
+      const y = statsY + 35 + row * 25;
+      
+      // 颜色圆点
+      ctx.beginPath();
+      ctx.arc(x + 8, y + 6, 6, 0, Math.PI * 2);
+      ctx.fillStyle = stat.color.hex;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+      
+      // 名称和数量
+      ctx.fillStyle = '#333333';
+      ctx.font = '10px Arial';
+      ctx.textAlign = 'left';
+      const displayName = stat.color.name.length > 4 ? stat.color.name.slice(0, 4) : stat.color.name;
+      ctx.fillText(`${displayName}×${stat.count}`, x + 18, y + 10);
+    });
+  }
   
   return canvas;
 }
@@ -265,9 +320,10 @@ export function downloadPattern(
   filename: string = 'bead-pattern.png',
   beadSize: number = 20,
   showGrid: boolean = true,
-  showLabels: boolean = true
+  showLabels: boolean = true,
+  colorStats?: Map<string, { color: BeadColor; count: number }>
 ): void {
-  const canvas = exportBeadPattern(beads, beadSize, showGrid, showLabels);
+  const canvas = exportBeadPattern(beads, beadSize, showGrid, showLabels, colorStats);
   
   const link = document.createElement('a');
   link.download = filename;
