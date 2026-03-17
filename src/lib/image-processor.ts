@@ -156,18 +156,23 @@ export function loadImageToCanvas(file: File): Promise<HTMLCanvasElement> {
   });
 }
 
+// 六角板预设（每行珠子数）
+const HEXAGON_PATTERN = [6, 8, 10, 12, 14, 16, 16, 14, 12, 10, 8, 6];
+const HEXAGON_MAX_WIDTH = 16;
+
 // 导出图纸为图片（水雾魔珠样式：圆形珠子 + 点阵网格 + 用料统计）
 export function exportBeadPattern(
   beads: ProcessedBead[][],
   beadSize: number = 20,
   showGrid: boolean = true,
   showLabels: boolean = true,
-  colorStats?: Map<string, { color: BeadColor; count: number }>
+  colorStats?: Map<string, { color: BeadColor; count: number }>,
+  canvasType: 'rect' | 'hexagon' = 'rect'
 ): HTMLCanvasElement {
   const height = beads.length;
-  const width = beads[0]?.length || 0;
+  const width = canvasType === 'hexagon' ? HEXAGON_MAX_WIDTH : (beads[0]?.length || 0);
   
-  if (width === 0 || height === 0) {
+  if (height === 0) {
     throw new Error('图纸数据无效');
   }
 
@@ -193,8 +198,11 @@ export function exportBeadPattern(
   if (showGrid) {
     ctx.fillStyle = '#E5E5E5';
     for (let y = 0; y <= height; y++) {
-      for (let x = 0; x <= width; x++) {
-        const px = padding + x * actualBeadSize;
+      const rowWidth = canvasType === 'hexagon' ? (HEXAGON_PATTERN[y] || 0) : beads[0]?.length || 0;
+      const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+      
+      for (let x = 0; x <= rowWidth; x++) {
+        const px = padding + (offsetX + x) * actualBeadSize;
         const py = padding + y * actualBeadSize;
         
         ctx.beginPath();
@@ -211,26 +219,39 @@ export function exportBeadPattern(
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    // 列标签
-    for (let x = 0; x < width; x++) {
-      if (x % 5 === 0 || x === width - 1) {
-        ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 22 * scale);
+    if (canvasType === 'hexagon') {
+      // 六角板只显示行标签
+      for (let y = 0; y < height; y++) {
+        if (y % 2 === 0 || y === height - 1) {
+          ctx.fillText((y + 1).toString(), padding - 22 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+        }
       }
-    }
-    
-    // 行标签
-    for (let y = 0; y < height; y++) {
-      if (y % 5 === 0 || y === height - 1) {
-        ctx.fillText((y + 1).toString(), padding - 22 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+    } else {
+      // 矩形标签
+      const rectWidth = beads[0]?.length || 0;
+      for (let x = 0; x < rectWidth; x++) {
+        if (x % 5 === 0 || x === rectWidth - 1) {
+          ctx.fillText((x + 1).toString(), padding + x * actualBeadSize + actualBeadSize / 2, padding - 22 * scale);
+        }
+      }
+      
+      for (let y = 0; y < height; y++) {
+        if (y % 5 === 0 || y === height - 1) {
+          ctx.fillText((y + 1).toString(), padding - 22 * scale, padding + y * actualBeadSize + actualBeadSize / 2);
+        }
       }
     }
   }
   
   // 绘制圆形珠子
   for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const bead = beads[y][x];
-      const cx = padding + x * actualBeadSize + actualBeadSize / 2;
+    const row = beads[y];
+    const rowWidth = row.length;
+    const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+    
+    for (let x = 0; x < rowWidth; x++) {
+      const bead = row[x];
+      const cx = padding + (offsetX + x) * actualBeadSize + actualBeadSize / 2;
       const cy = padding + y * actualBeadSize + actualBeadSize / 2;
       const radius = (actualBeadSize / 2) - 2 * scale;
       
@@ -324,9 +345,10 @@ export function downloadPattern(
   beadSize: number = 20,
   showGrid: boolean = true,
   showLabels: boolean = true,
-  colorStats?: Map<string, { color: BeadColor; count: number }>
+  colorStats?: Map<string, { color: BeadColor; count: number }>,
+  canvasType: 'rect' | 'hexagon' = 'rect'
 ): void {
-  const canvas = exportBeadPattern(beads, beadSize, showGrid, showLabels, colorStats);
+  const canvas = exportBeadPattern(beads, beadSize, showGrid, showLabels, colorStats, canvasType);
   
   const link = document.createElement('a');
   link.download = filename;

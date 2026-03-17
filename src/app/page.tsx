@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   Upload, Download, Copy, Settings, RotateCcw, ZoomIn, ZoomOut, 
-  Paintbrush, Eraser, MousePointer, Replace, ChevronDown, ChevronUp, X, Check, Move
+  Paintbrush, Eraser, MousePointer, Replace, ChevronDown, ChevronUp, X, Check, Move, Plus
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { 
   ProcessResult, 
+  ProcessedBead,
   processImageToBeads, 
   loadImageToCanvas, 
   downloadPattern,
@@ -28,17 +29,30 @@ import {
 } from '@/lib/bead-colors';
 
 type EditMode = 'drag' | 'brush' | 'eraser' | 'replace';
+type CanvasType = 'rect' | 'hexagon';
+
+// 六角板预设（每行珠子数）
+const HEXAGON_PATTERN = [6, 8, 10, 12, 14, 16, 16, 14, 12, 10, 8, 6];
+const HEXAGON_MAX_WIDTH = 16;
+const HEXAGON_HEIGHT = 12;
 
 export default function BeadGenerator() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedResult, setProcessedResult] = useState<ProcessResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [gridSize, setGridSize] = useState(20);
+  const [gridWidth, setGridWidth] = useState(20);
+  const [gridHeight, setGridHeight] = useState(20);
+  const [canvasType, setCanvasType] = useState<CanvasType>('rect');
   const [maxImageSize, setMaxImageSize] = useState(300);
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [isFileDragging, setIsFileDragging] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  
+  // 空白画布对话框
+  const [showBlankCanvasDialog, setShowBlankCanvasDialog] = useState(false);
+  const [blankCanvasWidth, setBlankCanvasWidth] = useState(20);
+  const [blankCanvasHeight, setBlankCanvasHeight] = useState(20);
   
   // 颜色选择相关
   const [selectedColorIds, setSelectedColorIds] = useState<Set<string>>(new Set(NORMAL_COLORS.map(c => c.id)));
@@ -90,7 +104,9 @@ export default function BeadGenerator() {
         if (color) categories.add(color.category);
       });
       
-      const result = processImageToBeads(imageData, gridSize, Array.from(categories));
+      // 使用gridWidth和gridHeight的平均值
+      const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
+      const result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
       
       // 过滤结果，只使用选中的颜色
       const selectedColors = getSelectedColors();
@@ -128,7 +144,7 @@ export default function BeadGenerator() {
     } finally {
       setIsProcessing(false);
     }
-  }, [gridSize, maxImageSize, selectedColorIds, getSelectedColors]);
+  }, [gridWidth, gridHeight, maxImageSize, selectedColorIds, getSelectedColors]);
 
   // 在选中颜色中找最接近的颜色
   const findClosestColor = (rgb: [number, number, number], colors: BeadColor[]): BeadColor => {
@@ -201,7 +217,9 @@ export default function BeadGenerator() {
           if (color) categories.add(color.category);
         });
         
-        const result = processImageToBeads(imageData, gridSize, Array.from(categories));
+        // 使用gridWidth和gridHeight的平均值作为gridSize
+        const avgGridSize = Math.round((gridWidth + gridHeight) / 2);
+        const result = processImageToBeads(imageData, avgGridSize, Array.from(categories));
         
         // 过滤结果
         const selectedColors = getSelectedColors();
@@ -238,7 +256,86 @@ export default function BeadGenerator() {
       console.error('重新处理失败:', error);
       setIsProcessing(false);
     }
-  }, [originalImage, gridSize, selectedColorIds, getSelectedColors]);
+  }, [originalImage, gridWidth, gridHeight, selectedColorIds, getSelectedColors]);
+
+  // 创建空白画布
+  const createBlankCanvas = useCallback((width: number, height: number, type: CanvasType = 'rect') => {
+    setCanvasType(type);
+    setOriginalImage(null);
+    
+    const defaultColor = ALL_COLORS.find(c => c.name === '奶白色') || ALL_COLORS[0];
+    const colorStats = new Map<string, { color: BeadColor; count: number }>();
+    
+    if (type === 'hexagon') {
+      // 六角板
+      const beads: ProcessedBead[][] = [];
+      HEXAGON_PATTERN.forEach(count => {
+        const row: ProcessedBead[] = [];
+        for (let x = 0; x < count; x++) {
+          row.push({
+            color: defaultColor,
+            originalRgb: [255, 255, 255]
+          });
+        }
+        beads.push(row);
+      });
+      
+      colorStats.set(defaultColor.id, { color: defaultColor, count: HEXAGON_PATTERN.reduce((a, b) => a + b, 0) });
+      
+      setProcessedResult({
+        beads,
+        width: HEXAGON_MAX_WIDTH,
+        height: HEXAGON_HEIGHT,
+        colorStats
+      });
+      setGridWidth(HEXAGON_MAX_WIDTH);
+      setGridHeight(HEXAGON_HEIGHT);
+    } else {
+      // 矩形画布
+      const beads: ProcessedBead[][] = [];
+      for (let y = 0; y < height; y++) {
+        const row: ProcessedBead[] = [];
+        for (let x = 0; x < width; x++) {
+          row.push({
+            color: defaultColor,
+            originalRgb: [255, 255, 255]
+          });
+        }
+        beads.push(row);
+      }
+      
+      colorStats.set(defaultColor.id, { color: defaultColor, count: width * height });
+      
+      setProcessedResult({
+        beads,
+        width,
+        height,
+        colorStats
+      });
+      setGridWidth(width);
+      setGridHeight(height);
+    }
+    
+    setEditMode('brush');
+    setSelectedPaintColor(defaultColor);
+    setCanvasZoom(1);
+    setCanvasOffset({ x: 0, y: 0 });
+  }, []);
+
+  // 应用预设
+  const applyPreset = useCallback((preset: 'hexagon' | 'small-square' | 'large-square') => {
+    switch (preset) {
+      case 'hexagon':
+        createBlankCanvas(HEXAGON_MAX_WIDTH, HEXAGON_HEIGHT, 'hexagon');
+        break;
+      case 'small-square':
+        createBlankCanvas(15, 15, 'rect');
+        break;
+      case 'large-square':
+        createBlankCanvas(21, 21, 'rect');
+        break;
+    }
+  }, [createBlankCanvas]);
 
   // 颜色类别展开/收起
   const toggleCategoryExpand = (category: ColorCategory) => {
@@ -302,7 +399,10 @@ export default function BeadGenerator() {
     const beadSize = 18 * canvasZoom;
     
     const padding = showLabels ? 45 : 15;
-    canvas.width = width * beadSize + padding * 2;
+    
+    // 对于六角板，宽度取最大值
+    const canvasWidth = canvasType === 'hexagon' ? HEXAGON_MAX_WIDTH : width;
+    canvas.width = canvasWidth * beadSize + padding * 2;
     canvas.height = height * beadSize + padding * 2;
     
     const ctx = canvas.getContext('2d')!;
@@ -315,8 +415,11 @@ export default function BeadGenerator() {
     if (showGrid) {
       ctx.fillStyle = '#E5E5E5';
       for (let y = 0; y <= height; y++) {
-        for (let x = 0; x <= width; x++) {
-          const px = padding + x * beadSize;
+        const rowWidth = canvasType === 'hexagon' ? (HEXAGON_PATTERN[y] || 0) : width;
+        const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+        
+        for (let x = 0; x <= rowWidth; x++) {
+          const px = padding + (offsetX + x) * beadSize;
           const py = padding + y * beadSize;
           ctx.beginPath();
           ctx.arc(px, py, 1.5 * canvasZoom, 0, Math.PI * 2);
@@ -332,24 +435,38 @@ export default function BeadGenerator() {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      for (let x = 0; x < width; x++) {
-        if (x % 5 === 0 || x === width - 1) {
-          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
+      if (canvasType === 'hexagon') {
+        // 六角板标签 - 只显示行号
+        for (let y = 0; y < height; y++) {
+          if (y % 2 === 0 || y === height - 1) {
+            ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          }
         }
-      }
-      
-      for (let y = 0; y < height; y++) {
-        if (y % 5 === 0 || y === height - 1) {
-          ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
+      } else {
+        // 矩形标签
+        for (let x = 0; x < width; x++) {
+          if (x % 5 === 0 || x === width - 1) {
+            ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18 * canvasZoom);
+          }
+        }
+        
+        for (let y = 0; y < height; y++) {
+          if (y % 5 === 0 || y === height - 1) {
+            ctx.fillText((y + 1).toString(), padding - 18 * canvasZoom, padding + y * beadSize + beadSize / 2);
+          }
         }
       }
     }
     
     // 绘制圆形珠子
     for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const bead = beads[y][x];
-        const cx = padding + x * beadSize + beadSize / 2;
+      const row = beads[y];
+      const rowWidth = row.length;
+      const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+      
+      for (let x = 0; x < rowWidth; x++) {
+        const bead = row[x];
+        const cx = padding + (offsetX + x) * beadSize + beadSize / 2;
         const cy = padding + y * beadSize + beadSize / 2;
         const radius = (beadSize / 2) - 1.5 * canvasZoom;
         
@@ -379,7 +496,7 @@ export default function BeadGenerator() {
         }
       }
     }
-  }, [processedResult, canvasZoom, showGrid, showLabels]);
+  }, [processedResult, canvasZoom, showGrid, showLabels, canvasType]);
 
   // Canvas 交互 - 拖拽/画笔/橡皮擦/替换
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -436,10 +553,18 @@ export default function BeadGenerator() {
     const beadSize = 18 * canvasZoom;
     const padding = showLabels ? 45 : 15;
     
-    const x = Math.floor((e.clientX - rect.left - padding) / beadSize);
+    // 计算点击位置
+    const clickX = (e.clientX - rect.left - padding) / beadSize;
     const y = Math.floor((e.clientY - rect.top - padding) / beadSize);
     
-    if (x < 0 || y < 0 || x >= processedResult.width || y >= processedResult.height) return;
+    if (y < 0 || y >= processedResult.height) return;
+    
+    // 对于六角板，需要考虑行偏移
+    const rowWidth = processedResult.beads[y].length;
+    const offsetX = canvasType === 'hexagon' ? (HEXAGON_MAX_WIDTH - rowWidth) / 2 : 0;
+    const x = Math.floor(clickX - offsetX);
+    
+    if (x < 0 || x >= rowWidth) return;
     
     const newResult = { ...processedResult };
     newResult.beads = processedResult.beads.map(row => [...row]);
@@ -555,7 +680,8 @@ export default function BeadGenerator() {
       32,  // 增大珠子尺寸，配合2倍高清导出
       showGrid,
       showLabels,
-      processedResult.colorStats
+      processedResult.colorStats,
+      canvasType
     );
   };
 
@@ -571,7 +697,9 @@ export default function BeadGenerator() {
   const handleReset = () => {
     setOriginalImage(null);
     setProcessedResult(null);
-    setGridSize(20);
+    setGridWidth(20);
+    setGridHeight(20);
+    setCanvasType('rect');
     setMaxImageSize(300);
     setSelectedColorIds(new Set(NORMAL_COLORS.map(c => c.id)));
     setEditMode('drag');
@@ -778,19 +906,79 @@ export default function BeadGenerator() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* 空白画布按钮 */}
+                  <Button 
+                    variant="outline" 
+                    className="w-full"
+                    onClick={() => setShowBlankCanvasDialog(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />新建空白画布
+                  </Button>
+                  
+                  {/* 画布尺寸预设 */}
                   <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <Label className="text-sm">图纸尺寸</Label>
-                      <Badge variant="secondary">{gridSize} × {gridSize}</Badge>
+                    <Label className="text-sm">画布尺寸预设</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button 
+                        variant={canvasType === 'hexagon' ? 'default' : 'outline'} 
+                        size="sm"
+                        onClick={() => applyPreset('hexagon')}
+                      >
+                        六角板
+                      </Button>
+                      <Button 
+                        variant={canvasType === 'rect' && gridWidth === 15 && gridHeight === 15 ? 'default' : 'outline'} 
+                        size="sm"
+                        onClick={() => applyPreset('small-square')}
+                      >
+                        小方板
+                      </Button>
+                      <Button 
+                        variant={canvasType === 'rect' && gridWidth === 21 && gridHeight === 21 ? 'default' : 'outline'} 
+                        size="sm"
+                        onClick={() => applyPreset('large-square')}
+                      >
+                        大方板
+                      </Button>
                     </div>
-                    <Slider
-                      min={10} max={200} step={5}
-                      value={[gridSize]}
-                      onValueChange={([value]) => setGridSize(value)}
-                      onValueCommit={() => reprocessImage()}
-                    />
-                    <p className="text-xs text-gray-500">最大支持200×200</p>
                   </div>
+                  
+                  {/* 图纸尺寸（仅矩形画布可调整） */}
+                  {canvasType === 'rect' && (
+                    <div className="space-y-3">
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-sm">宽度</Label>
+                          <Badge variant="secondary">{gridWidth}</Badge>
+                        </div>
+                        <Slider
+                          min={5} max={200} step={1}
+                          value={[gridWidth]}
+                          onValueChange={([value]) => setGridWidth(value)}
+                          onValueCommit={() => reprocessImage()}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between items-center">
+                          <Label className="text-sm">高度</Label>
+                          <Badge variant="secondary">{gridHeight}</Badge>
+                        </div>
+                        <Slider
+                          min={5} max={200} step={1}
+                          value={[gridHeight]}
+                          onValueChange={([value]) => setGridHeight(value)}
+                          onValueCommit={() => reprocessImage()}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500">当前尺寸: {gridWidth} × {gridHeight}</p>
+                    </div>
+                  )}
+                  
+                  {canvasType === 'hexagon' && (
+                    <div className="p-2 bg-purple-50 rounded-lg">
+                      <p className="text-sm text-purple-700">六角板: 132颗珠子（{HEXAGON_HEIGHT}行）</p>
+                    </div>
+                  )}
                   
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -1085,6 +1273,65 @@ export default function BeadGenerator() {
             </div>
           </div>
         </div>
+
+        {/* 空白画布对话框 */}
+        {showBlankCanvasDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-[400px]">
+              <CardHeader className="flex flex-row items-center justify-between py-3">
+                <CardTitle className="text-base">新建空白画布</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setShowBlankCanvasDialog(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm">宽度</Label>
+                      <Badge variant="secondary">{blankCanvasWidth}</Badge>
+                    </div>
+                    <Slider
+                      min={5} max={100} step={1}
+                      value={[blankCanvasWidth]}
+                      onValueChange={([value]) => setBlankCanvasWidth(value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <Label className="text-sm">高度</Label>
+                      <Badge variant="secondary">{blankCanvasHeight}</Badge>
+                    </div>
+                    <Slider
+                      min={5} max={100} step={1}
+                      value={[blankCanvasHeight]}
+                      onValueChange={([value]) => setBlankCanvasHeight(value)}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-gray-500">总计: {blankCanvasWidth * blankCanvasHeight} 颗珠子</p>
+                <div className="flex gap-2">
+                  <Button 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => setShowBlankCanvasDialog(false)}
+                  >
+                    取消
+                  </Button>
+                  <Button 
+                    className="flex-1"
+                    onClick={() => {
+                      createBlankCanvas(blankCanvasWidth, blankCanvasHeight, 'rect');
+                      setShowBlankCanvasDialog(false);
+                    }}
+                  >
+                    创建
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* 颜色替换对话框 */}
         {showReplaceDialog && replaceFromColor && (
