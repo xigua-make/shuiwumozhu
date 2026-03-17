@@ -25,9 +25,9 @@ export default function BeadGenerator() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
   const [processedResult, setProcessedResult] = useState<ProcessResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [gridSize, setGridSize] = useState(30);
-  const [maxImageSize, setMaxImageSize] = useState(400);
-  const [beadSize, setBeadSize] = useState(15);
+  const [gridSize, setGridSize] = useState(20);
+  const [maxImageSize, setMaxImageSize] = useState(300);
+  const [beadSize, setBeadSize] = useState(18);
   const [showGrid, setShowGrid] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
@@ -124,14 +124,14 @@ export default function BeadGenerator() {
     }
   }, [originalImage, gridSize]);
 
-  // 绘制图纸到 Canvas
+  // 绘制图纸到 Canvas（水雾魔珠样式：圆形珠子 + 点阵网格）
   useEffect(() => {
     if (!processedResult || !canvasRef.current) return;
     
     const canvas = canvasRef.current;
     const { beads, width, height } = processedResult;
     
-    const padding = showLabels ? 40 : 10;
+    const padding = showLabels ? 45 : 15;
     canvas.width = width * beadSize + padding * 2;
     canvas.height = height * beadSize + padding * 2;
     
@@ -141,44 +141,79 @@ export default function BeadGenerator() {
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
+    // 绘制点阵网格（小圆点）
+    if (showGrid) {
+      ctx.fillStyle = '#E5E5E5';
+      for (let y = 0; y <= height; y++) {
+        for (let x = 0; x <= width; x++) {
+          const px = padding + x * beadSize;
+          const py = padding + y * beadSize;
+          
+          ctx.beginPath();
+          ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    
     // 绘制标签
     if (showLabels) {
-      ctx.fillStyle = '#666666';
-      ctx.font = '10px Arial';
+      ctx.fillStyle = '#999999';
+      ctx.font = '11px Arial';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
       // 列标签
       for (let x = 0; x < width; x++) {
-        if (x % 5 === 0) {
-          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 15);
+        if (x % 5 === 0 || x === width - 1) {
+          ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18);
         }
       }
       
       // 行标签
       for (let y = 0; y < height; y++) {
-        if (y % 5 === 0) {
-          ctx.fillText((y + 1).toString(), padding - 15, padding + y * beadSize + beadSize / 2);
+        if (y % 5 === 0 || y === height - 1) {
+          ctx.fillText((y + 1).toString(), padding - 18, padding + y * beadSize + beadSize / 2);
         }
       }
     }
     
-    // 绘制珠子
+    // 绘制圆形珠子
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const bead = beads[y][x];
-        const px = padding + x * beadSize;
-        const py = padding + y * beadSize;
+        const cx = padding + x * beadSize + beadSize / 2;
+        const cy = padding + y * beadSize + beadSize / 2;
+        const radius = (beadSize / 2) - 1.5; // 稍微缩小一点，留出间隙
         
-        // 填充颜色
-        ctx.fillStyle = bead.color.hex;
-        ctx.fillRect(px, py, beadSize, beadSize);
-        
-        // 绘制网格
-        if (showGrid && beadSize >= 8) {
-          ctx.strokeStyle = '#DDDDDD';
+        if (radius > 0) {
+          // 绘制圆形珠子
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          
+          // 填充颜色
+          ctx.fillStyle = bead.color.hex;
+          ctx.fill();
+          
+          // 添加微妙的边框
+          ctx.strokeStyle = 'rgba(0,0,0,0.1)';
           ctx.lineWidth = 0.5;
-          ctx.strokeRect(px, py, beadSize, beadSize);
+          ctx.stroke();
+          
+          // 添加高光效果（让珠子更立体）
+          const highlightRadius = radius * 0.6;
+          const gradient = ctx.createRadialGradient(
+            cx - radius * 0.3, cy - radius * 0.3, 0,
+            cx, cy, radius
+          );
+          gradient.addColorStop(0, 'rgba(255,255,255,0.4)');
+          gradient.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+          gradient.addColorStop(1, 'rgba(0,0,0,0.05)');
+          
+          ctx.beginPath();
+          ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+          ctx.fillStyle = gradient;
+          ctx.fill();
         }
       }
     }
@@ -189,8 +224,8 @@ export default function BeadGenerator() {
     if (!processedResult) return;
     downloadPattern(
       processedResult.beads,
-      `bead-pattern-${Date.now()}.png`,
-      20,
+      `水雾魔珠图纸-${Date.now()}.png`,
+      24, // 导出时使用较大的珠子尺寸
       showGrid,
       showLabels
     );
@@ -208,9 +243,9 @@ export default function BeadGenerator() {
   const handleReset = () => {
     setOriginalImage(null);
     setProcessedResult(null);
-    setGridSize(30);
-    setMaxImageSize(400);
-    setBeadSize(15);
+    setGridSize(20);
+    setMaxImageSize(300);
+    setBeadSize(18);
   };
 
   return (
@@ -302,13 +337,13 @@ export default function BeadGenerator() {
                   <Slider
                     id="gridSize"
                     min={10}
-                    max={80}
-                    step={5}
+                    max={50}
+                    step={2}
                     value={[gridSize]}
                     onValueChange={([value]) => setGridSize(value)}
                     onValueCommit={() => reprocessImage()}
                   />
-                  <p className="text-xs text-gray-500">数值越大，图纸越精细，珠子数量越多</p>
+                  <p className="text-xs text-gray-500">建议15-25格，适合制作小挂饰</p>
                 </div>
 
                 {/* 图片大小限制 */}
@@ -335,7 +370,7 @@ export default function BeadGenerator() {
                   <div className="flex items-center justify-between">
                     <Label htmlFor="showGrid" className="flex items-center gap-2">
                       {showGrid ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                      显示网格
+                      显示点阵网格
                     </Label>
                     <Switch
                       id="showGrid"
@@ -368,9 +403,9 @@ export default function BeadGenerator() {
                   <div className="flex items-center gap-2">
                     <ZoomOut className="w-4 h-4 text-gray-400" />
                     <Slider
-                      min={5}
-                      max={30}
-                      step={1}
+                      min={8}
+                      max={40}
+                      step={2}
                       value={[beadSize]}
                       onValueChange={([value]) => setBeadSize(value)}
                       className="flex-1"
@@ -486,7 +521,7 @@ export default function BeadGenerator() {
                           className="flex items-center gap-2 p-2 rounded-lg border bg-white hover:shadow-md transition-shadow"
                         >
                           <div 
-                            className="w-8 h-8 rounded border shadow-sm"
+                            className="w-8 h-8 rounded-full border shadow-sm"
                             style={{ backgroundColor: stat.color.hex }}
                             title={stat.color.name}
                           />
@@ -538,10 +573,10 @@ export default function BeadGenerator() {
                     </div>
                   </div>
                   
-                  <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-800">
-                      <strong>提示：</strong>水雾魔珠（又称拼豆）通过在模板板上排列珠子，然后用熨斗加热制作。
-                      选择合适的图片大小，避免图纸过大导致制作困难。
+                  <div className="mt-4 p-4 bg-cyan-50 border border-cyan-200 rounded-lg">
+                    <p className="text-sm text-cyan-800">
+                      <strong>提示：</strong>水雾魔珠通过在模板板上排列珠子，然后<strong>喷水粘合</strong>制作完成。
+                      建议选择简单清晰的图片，尺寸控制在15-25格左右，适合制作钥匙扣、小挂饰等。
                     </p>
                   </div>
                 </CardContent>

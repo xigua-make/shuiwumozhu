@@ -151,7 +151,7 @@ export function loadImageToCanvas(file: File): Promise<HTMLCanvasElement> {
   });
 }
 
-// 导出图纸为图片
+// 导出图纸为图片（水雾魔珠样式：圆形珠子 + 点阵网格）
 export function exportBeadPattern(
   beads: ProcessedBead[][],
   beadSize: number = 20,
@@ -166,11 +166,10 @@ export function exportBeadPattern(
   }
 
   const canvas = document.createElement('canvas');
-  const padding = showLabels ? 60 : 20;
-  const labelSize = showLabels ? 40 : 0;
+  const padding = showLabels ? 50 : 15;
   
-  canvas.width = width * beadSize + padding * 2 + labelSize;
-  canvas.height = height * beadSize + padding * 2 + labelSize;
+  canvas.width = width * beadSize + padding * 2;
+  canvas.height = height * beadSize + padding * 2;
   
   const ctx = canvas.getContext('2d')!;
   
@@ -178,50 +177,76 @@ export function exportBeadPattern(
   ctx.fillStyle = '#FFFFFF';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   
-  // 绘制标签（行号和列号）
-  if (showLabels) {
-    ctx.fillStyle = '#333333';
-    ctx.font = '12px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    
-    // 列标签（数字）
-    for (let x = 0; x < width; x++) {
-      const label = (x + 1).toString();
-      ctx.fillText(
-        label,
-        padding + labelSize + x * beadSize + beadSize / 2,
-        padding / 2 + 5
-      );
-    }
-    
-    // 行标签（数字）
-    for (let y = 0; y < height; y++) {
-      const label = (y + 1).toString();
-      ctx.fillText(
-        label,
-        padding / 2 + 5,
-        padding + labelSize + y * beadSize + beadSize / 2
-      );
+  // 绘制点阵网格（小圆点）
+  if (showGrid) {
+    ctx.fillStyle = '#E5E5E5';
+    for (let y = 0; y <= height; y++) {
+      for (let x = 0; x <= width; x++) {
+        const px = padding + x * beadSize;
+        const py = padding + y * beadSize;
+        
+        ctx.beginPath();
+        ctx.arc(px, py, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
   
-  // 绘制珠子
+  // 绘制标签
+  if (showLabels) {
+    ctx.fillStyle = '#999999';
+    ctx.font = '11px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // 列标签
+    for (let x = 0; x < width; x++) {
+      if (x % 5 === 0 || x === width - 1) {
+        ctx.fillText((x + 1).toString(), padding + x * beadSize + beadSize / 2, padding - 18);
+      }
+    }
+    
+    // 行标签
+    for (let y = 0; y < height; y++) {
+      if (y % 5 === 0 || y === height - 1) {
+        ctx.fillText((y + 1).toString(), padding - 18, padding + y * beadSize + beadSize / 2);
+      }
+    }
+  }
+  
+  // 绘制圆形珠子
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const bead = beads[y][x];
-      const px = padding + labelSize + x * beadSize;
-      const py = padding + labelSize + y * beadSize;
+      const cx = padding + x * beadSize + beadSize / 2;
+      const cy = padding + y * beadSize + beadSize / 2;
+      const radius = (beadSize / 2) - 1.5;
       
-      // 填充颜色
-      ctx.fillStyle = bead.color.hex;
-      ctx.fillRect(px, py, beadSize, beadSize);
-      
-      // 绘制网格
-      if (showGrid) {
-        ctx.strokeStyle = '#CCCCCC';
+      if (radius > 0) {
+        // 绘制圆形珠子
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = bead.color.hex;
+        ctx.fill();
+        
+        // 微妙边框
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
         ctx.lineWidth = 0.5;
-        ctx.strokeRect(px, py, beadSize, beadSize);
+        ctx.stroke();
+        
+        // 高光效果
+        const gradient = ctx.createRadialGradient(
+          cx - radius * 0.3, cy - radius * 0.3, 0,
+          cx, cy, radius
+        );
+        gradient.addColorStop(0, 'rgba(255,255,255,0.4)');
+        gradient.addColorStop(0.5, 'rgba(255,255,255,0.1)');
+        gradient.addColorStop(1, 'rgba(0,0,0,0.05)');
+        
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+        ctx.fillStyle = gradient;
+        ctx.fill();
       }
     }
   }
