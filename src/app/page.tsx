@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Upload, Download, Copy, Settings, RotateCcw, ZoomIn, ZoomOut, Eye, EyeOff } from 'lucide-react';
+import { Upload, Download, Copy, Settings, RotateCcw, ZoomIn, ZoomOut, Eye, EyeOff, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { 
   ProcessResult, 
   processImageToBeads, 
@@ -19,7 +20,7 @@ import {
   copyColorList,
   resizeImage
 } from '@/lib/image-processor';
-import { BEAD_COLORS, BeadColor } from '@/lib/bead-colors';
+import { NORMAL_COLORS, GLOW_COLORS, CRYSTAL_COLORS, ColorCategory, BeadColor } from '@/lib/bead-colors';
 
 export default function BeadGenerator() {
   const [originalImage, setOriginalImage] = useState<string | null>(null);
@@ -32,6 +33,7 @@ export default function BeadGenerator() {
   const [showLabels, setShowLabels] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+  const [colorCategories, setColorCategories] = useState<ColorCategory[]>(['normal']);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -57,7 +59,7 @@ export default function BeadGenerator() {
       // 处理图片
       const ctx = resizedCanvas.getContext('2d')!;
       const imageData = ctx.getImageData(0, 0, resizedCanvas.width, resizedCanvas.height);
-      const result = processImageToBeads(imageData, gridSize);
+      const result = processImageToBeads(imageData, gridSize, colorCategories);
       
       setProcessedResult(result);
     } catch (error) {
@@ -66,7 +68,7 @@ export default function BeadGenerator() {
     } finally {
       setIsProcessing(false);
     }
-  }, [gridSize, maxImageSize]);
+  }, [gridSize, maxImageSize, colorCategories]);
 
   // 文件选择
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,7 +115,7 @@ export default function BeadGenerator() {
         ctx.drawImage(img, 0, 0);
         
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const result = processImageToBeads(imageData, gridSize);
+        const result = processImageToBeads(imageData, gridSize, colorCategories);
         setProcessedResult(result);
         setIsProcessing(false);
       };
@@ -122,7 +124,7 @@ export default function BeadGenerator() {
       console.error('重新处理失败:', error);
       setIsProcessing(false);
     }
-  }, [originalImage, gridSize]);
+  }, [originalImage, gridSize, colorCategories]);
 
   // 绘制图纸到 Canvas（水雾魔珠样式：圆形珠子 + 点阵网格）
   useEffect(() => {
@@ -246,6 +248,20 @@ export default function BeadGenerator() {
     setGridSize(20);
     setMaxImageSize(300);
     setBeadSize(18);
+    setColorCategories(['normal']);
+  };
+
+  // 切换颜色类别
+  const toggleColorCategory = (category: ColorCategory) => {
+    setColorCategories(prev => {
+      if (prev.includes(category)) {
+        // 至少保留一个类别
+        if (prev.length === 1) return prev;
+        return prev.filter(c => c !== category);
+      } else {
+        return [...prev, category];
+      }
+    });
   };
 
   return (
@@ -328,6 +344,88 @@ export default function BeadGenerator() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
+                {/* 珠子颜色类别 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-purple-500" />
+                    <Label>珠子类型</Label>
+                  </div>
+                  <div className="space-y-3">
+                    {/* 普通款 */}
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow">
+                      <Checkbox
+                        id="normal"
+                        checked={colorCategories.includes('normal')}
+                        onCheckedChange={() => toggleColorCategory('normal')}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="normal" className="font-medium cursor-pointer">
+                          普通款（24色糖果珠）
+                        </Label>
+                        <p className="text-xs text-gray-500 mt-1">默认推荐，颜色丰富</p>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {NORMAL_COLORS.slice(0, 12).map(c => (
+                            <div key={c.id} className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} title={c.name} />
+                          ))}
+                          <span className="text-xs text-gray-400">+12色</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 夜光款 */}
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow">
+                      <Checkbox
+                        id="glow"
+                        checked={colorCategories.includes('glow')}
+                        onCheckedChange={() => toggleColorCategory('glow')}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="glow" className="font-medium cursor-pointer">
+                          夜光款（12色）
+                        </Label>
+                        <p className="text-xs text-gray-500 mt-1">黑暗中会发光</p>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {GLOW_COLORS.map(c => (
+                            <div key={c.id} className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} title={c.name} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* 水晶珠 */}
+                    <div className="flex items-start gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-shadow">
+                      <Checkbox
+                        id="crystal"
+                        checked={colorCategories.includes('crystal')}
+                        onCheckedChange={() => toggleColorCategory('crystal')}
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="crystal" className="font-medium cursor-pointer">
+                          水晶珠（12色）
+                        </Label>
+                        <p className="text-xs text-gray-500 mt-1">半透明质感</p>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {CRYSTAL_COLORS.map(c => (
+                            <div key={c.id} className="w-4 h-4 rounded-full border" style={{ backgroundColor: c.hex }} title={c.name} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    已选择 {colorCategories.length} 种类型，共 {
+                      (colorCategories.includes('normal') ? 24 : 0) +
+                      (colorCategories.includes('glow') ? 12 : 0) +
+                      (colorCategories.includes('crystal') ? 12 : 0)
+                    } 种颜色
+                  </p>
+                </div>
+
+                <Separator />
+
                 {/* 网格大小 */}
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">

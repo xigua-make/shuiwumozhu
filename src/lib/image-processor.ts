@@ -1,4 +1,4 @@
-import { BeadColor, findClosestBeadColor, BEAD_COLORS } from './bead-colors';
+import { BeadColor, findClosestBeadColor, DEFAULT_COLORS, ColorCategory, getColorsByCategories } from './bead-colors';
 
 export interface ProcessedBead {
   color: BeadColor;
@@ -15,11 +15,16 @@ export interface ProcessResult {
 // 将图片处理成魔珠图纸
 export function processImageToBeads(
   imageData: ImageData,
-  gridSize: number
+  gridSize: number,
+  colorCategories: ColorCategory[] = ['normal']
 ): ProcessResult {
   const { width, height, data } = imageData;
   const beads: ProcessedBead[][] = [];
   const colorStats = new Map<string, { color: BeadColor; count: number }>();
+  
+  // 获取选定的颜色集
+  const availableColors = getColorsByCategories(colorCategories);
+  const defaultColor = availableColors.find(c => c.name === '奶白色') || availableColors[0];
 
   // 计算每个网格单元的大小
   const cellWidth = Math.max(1, Math.floor(width / gridSize));
@@ -63,9 +68,9 @@ export function processImageToBeads(
       let beadColor: BeadColor;
 
       if (pixelCount === 0) {
-        // 如果没有有效像素，使用白色
+        // 如果没有有效像素，使用默认颜色
         originalRgb = [255, 255, 255];
-        beadColor = BEAD_COLORS[0]; // 白色
+        beadColor = defaultColor;
       } else {
         // 计算平均颜色
         const avgR = Math.round(totalR / pixelCount);
@@ -74,8 +79,8 @@ export function processImageToBeads(
         
         originalRgb = [avgR, avgG, avgB];
         
-        // 找到最接近的魔珠颜色
-        beadColor = findClosestBeadColor(avgR, avgG, avgB);
+        // 在选定颜色集中找到最接近的魔珠颜色
+        beadColor = findClosestBeadColor(avgR, avgG, avgB, availableColors);
       }
 
       row.push({
